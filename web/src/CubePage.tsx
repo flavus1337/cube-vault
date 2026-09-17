@@ -8,6 +8,17 @@ const RARITY: Record<string, string> = {
   mythic: 'Mythisch selten',
 }
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
+// German label with the words to look for in the type line (German or English).
+const TYPES: [string, RegExp][] = [
+  ['Kreatur', /Kreatur|Creature/i],
+  ['Land', /Land/i],
+  ['Spontanzauber', /Spontanzauber|Instant/i],
+  ['Hexerei', /Hexerei|Sorcery/i],
+  ['Verzauberung', /Verzauberung|Enchantment/i],
+  ['Artefakt', /Artefakt|Artifact/i],
+  ['Planeswalker', /Planeswalker/i],
+  ['Kampf', /Kampf|Battle/i],
+]
 
 const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
@@ -26,6 +37,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [text, setText] = useState('')
   const [colors, setColors] = useState<Set<string>>(new Set())
   const [rarity, setRarity] = useState('')
+  const [cardType, setCardType] = useState('')
   const [setCode, setSetCode] = useState('')
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
@@ -78,6 +90,7 @@ export default function CubePage({ role }: { role: Role }) {
         (showExcluded || !c.excluded) &&
         (show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))) &&
         (!rarity || c.rarity === rarity) &&
+        (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
         [...colors].every((col) => (col === 'C' ? !c.colors : c.colors.includes(col))) &&
         [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
     )
@@ -90,7 +103,7 @@ export default function CubePage({ role }: { role: Role }) {
         a.set_code.localeCompare(b.set_code) || parseInt(a.number, 10) - parseInt(b.number, 10),
     }
     return result.sort(sorters[sort])
-  }, [cards, sets, copies, text, colors, rarity, setCode, sort, showExcluded, show])
+  }, [cards, sets, copies, text, colors, rarity, cardType, setCode, sort, showExcluded, show])
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
@@ -141,7 +154,15 @@ export default function CubePage({ role }: { role: Role }) {
           <option value="">Alle Sets</option>
           {cubeSets.map((s) => (
             <option key={s.code} value={s.code}>
-              {s.name}
+              {s.parent_code ? `↳ ${s.name}` : s.name}
+            </option>
+          ))}
+        </select>
+        <select id="type" aria-label="Kartentyp" value={cardType} onChange={(e) => setCardType(e.target.value)}>
+          <option value="">Alle Typen</option>
+          {TYPES.map(([label]) => (
+            <option key={label} value={label}>
+              {label}
             </option>
           ))}
         </select>

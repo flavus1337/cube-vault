@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'card_parser.dart';
 import 'db.dart';
@@ -71,6 +72,7 @@ class _ScanPageState extends State<ScanPage> {
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable(); // the screen must not switch off while scanning
     _start();
     Db.setCodes().then((codes) => _knownSets = codes).catchError((_) => const <String>{});
   }
@@ -267,9 +269,7 @@ class _ScanPageState extends State<ScanPage> {
     var card = await Db.findCard(setCode, oracleId);
     if (card == null) {
       if (await Db.findSet(setCode) == null) {
-        final add = !_declinedSets.contains(setCode) && await _askNewSet('${json['set_name']}');
-        if (!add) {
-          _declinedSets.add(setCode);
+        if (_declinedSets.contains(setCode)) {
           return (
             printId: printId,
             lang: lang,
@@ -279,6 +279,22 @@ class _ScanPageState extends State<ScanPage> {
         }
         final set = await fetchSet(setCode);
         if (set == null) return null;
+        // A bonus sheet or commander deck of a set in the cube joins silently.
+        final parent = set['parent_set_code'] as String?;
+        var parentCode = parent != null && await Db.findSet(parent) != null ? parent : null;
+        if (parentCode == null) {
+          final answer = await _askNewSet('${json['set_name']}');
+          if (answer == null) {
+            _declinedSets.add(setCode);
+            return (
+              printId: printId,
+              lang: lang,
+              card: null,
+              problem: '${json['set_name']} ist nicht im Cube',
+            );
+          }
+          parentCode = answer.isEmpty ? null : answer;
+        }
         // The whole set comes in with 0 copies, so the cube can show what is missing.
         if (mounted) {
           _showFlash(
@@ -289,7 +305,7 @@ class _ScanPageState extends State<ScanPage> {
             duration: const Duration(minutes: 1), // replaced by the next flash
           );
         }
-        await Db.addSet(set);
+        await Db.addSet(set, parentCode: parentCode);
         await Db.addCards(await fetchSetRows(setCode));
         card = await Db.findCard(setCode, oracleId);
       }
@@ -360,25 +376,35 @@ class _ScanPageState extends State<ScanPage> {
     );
   }
 
-  // Scanning pauses while the dialog is open: frames are skipped while busy.
-  Future<bool> _askNewSet(String setName) async {
-    if (!mounted) return false;
+  /// Asks what to do with a set that is not in the cube. Returns the parent set
+  /// code for a sub-set, an empty string for a set of its own, null for no.
+  /// Scanning pauses while the dialog is open: frames are skipped while busy.
+  Future<String?> _askNewSet(String setName) async {
+    if (!mounted) return null;
     HapticFeedback.mediumImpact();
-    return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Neues Set'),
-            content: Text('$setName ist noch nicht im Cube. Set hinzufügen und Karte zählen?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nein')),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Hinzufügen'),
-              ),
-            ],
+    final cubeSets = await Db.cubeSets();
+    if (!mounted) return null;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('$setName ist nicht im Cube'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: const Text('Als eigenes Set aufnehmen'),
           ),
-        ) ??
-        false;
+          for (final set in cubeSets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, '${set['code']}'),
+              child: Text('Als Zusatz zu ${set['name']}'),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Nicht aufnehmen'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAdded(Map<String, Object?> card, int qty) => _showFlash(
@@ -391,6 +417,7 @@ class _ScanPageState extends State<ScanPage> {
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _flashTimer?.cancel();
     _cam?.dispose();
     _ocr.close();

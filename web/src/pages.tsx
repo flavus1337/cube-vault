@@ -189,6 +189,7 @@ export function SetsPage({ role }: { role: Role }) {
               <tr>
                 <th>Set</th>
                 <th>Code</th>
+                <th>Gehört zu</th>
                 <th>Erschienen</th>
                 <th className="num">Karten</th>
                 <th>Im Cube</th>
@@ -204,6 +205,7 @@ export function SetsPage({ role }: { role: Role }) {
                     </span>
                   </td>
                   <td>{s.code.toUpperCase()}</td>
+                  <td>{sets.find((p) => p.code === s.parent_code)?.name ?? (s.parent_code ?? '—')}</td>
                   <td className="nowrap">{s.released_at && new Date(s.released_at).toLocaleDateString('de-DE')}</td>
                   <td className="num">{counts.get(s.code) ?? 0}</td>
                   <td>

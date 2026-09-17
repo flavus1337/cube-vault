@@ -70,7 +70,11 @@ export default function App() {
         </button>
         <p className="muted">
           Zum Scannen:{' '}
-          <a href="https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk">
+          <a
+            href="https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk"
+            target="_blank"
+            rel="noopener"
+          >
             Android-App laden
           </a>
         </p>
@@ -108,8 +112,8 @@ export default function App() {
             </a>
           ))}
         </nav>
-        <a className="apk" href={APK_URL}>
-          Android-App
+        <a className="apk" href={APK_URL} target="_blank" rel="noopener">
+          App laden
         </a>
         <div className="me">
           {profile.avatar_url && <img src={profile.avatar_url} alt="" />}

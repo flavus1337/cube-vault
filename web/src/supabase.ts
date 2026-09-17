@@ -24,6 +24,8 @@ export type CubeSet = {
   released_at: string | null
   icon_svg_uri: string | null
   in_cube: boolean
+  // Bonus sheets and commander decks belong to a main set, e.g. blc to blb.
+  parent_code: string | null
   added_by: string | null
   added_at: string
 }

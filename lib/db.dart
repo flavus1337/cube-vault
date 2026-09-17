@@ -63,15 +63,21 @@ class Db {
   static Future<Map<String, Object?>?> findSet(String code) =>
       _sb.from('sets').select().eq('code', code).maybeSingle();
 
-  /// [set] is Scryfall's set object.
-  static Future<void> addSet(Map<String, dynamic> set) async {
+  /// [set] is Scryfall's set object. [parentCode] links a bonus sheet or a
+  /// commander deck to the main set it is drafted with.
+  static Future<void> addSet(Map<String, dynamic> set, {String? parentCode}) async {
     await _sb.from('sets').upsert({
       'code': set['code'],
       'name': set['name'],
       'released_at': set['released_at'],
       'icon_svg_uri': set['icon_svg_uri'],
+      'parent_code': parentCode ?? set['parent_set_code'],
     }, ignoreDuplicates: true);
   }
+
+  /// Sets in the cube with their codes and names, for the sub-set question.
+  static Future<List<Map<String, Object?>>> cubeSets() =>
+      _sb.from('sets').select('code, name').eq('in_cube', true).order('name');
 
   /// Inserts cards that are not there yet. Existing cards keep their data and exclusions.
   static Future<void> addCards(List<Map<String, Object?>> rows) async {
