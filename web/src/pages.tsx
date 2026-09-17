@@ -109,8 +109,8 @@ export function HistoryPage() {
 export function SetsPage({ role }: { role: Role }) {
   const [sets, setSets] = useState<CubeSet[] | null>(null)
   const [counts, setCounts] = useState<Map<string, number>>(new Map())
-  // Per set: cards with at least one scanned copy, and the number of copies.
-  const [owned, setOwned] = useState<Map<string, { cards: number; copies: number }>>(new Map())
+  // Per set: how many of its cards have at least one scanned copy.
+  const [owned, setOwned] = useState<Map<string, number>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [code, setCode] = useState('')
   const [progress, setProgress] = useState('')
@@ -128,14 +128,11 @@ export function SetsPage({ role }: { role: Role }) {
         for (const c of cards) counts.set(c.set_code, (counts.get(c.set_code) ?? 0) + 1)
 
         const setOf = new Map(cards.map((c) => [c.id, c.set_code]))
-        const perCard = new Map<string, number>()
-        for (const row of copyRows) perCard.set(row.card_id, (perCard.get(row.card_id) ?? 0) + row.qty)
-        const ownedPerSet = new Map<string, { cards: number; copies: number }>()
-        for (const [cardId, qty] of perCard) {
+        const scanned = new Set(copyRows.map((row) => row.card_id))
+        const ownedPerSet = new Map<string, number>()
+        for (const cardId of scanned) {
           const code = setOf.get(cardId)
-          if (!code) continue
-          const entry = ownedPerSet.get(code) ?? { cards: 0, copies: 0 }
-          ownedPerSet.set(code, { cards: entry.cards + 1, copies: entry.copies + qty })
+          if (code) ownedPerSet.set(code, (ownedPerSet.get(code) ?? 0) + 1)
         }
 
         setSets(sets.sort((a, b) => (b.released_at ?? '').localeCompare(a.released_at ?? '')))
@@ -209,7 +206,6 @@ export function SetsPage({ role }: { role: Role }) {
                 <th>Gehört zu</th>
                 <th>Erschienen</th>
                 <th className="num">Vorhanden</th>
-                <th className="num">Kopien</th>
                 <th className="num">Karten im Set</th>
                 <th>Im Cube</th>
               </tr>
@@ -226,8 +222,7 @@ export function SetsPage({ role }: { role: Role }) {
                   <td>{s.code.toUpperCase()}</td>
                   <td>{sets.find((p) => p.code === s.parent_code)?.name ?? (s.parent_code ?? '—')}</td>
                   <td className="nowrap">{s.released_at && new Date(s.released_at).toLocaleDateString('de-DE')}</td>
-                  <td className="num">{owned.get(s.code)?.cards ?? 0}</td>
-                  <td className="num">{owned.get(s.code)?.copies ?? 0}</td>
+                  <td className="num">{owned.get(s.code) ?? 0}</td>
                   <td className="num">{counts.get(s.code) ?? 0}</td>
                   <td>
                     {editable ? (
