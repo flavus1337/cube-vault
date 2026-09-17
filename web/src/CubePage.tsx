@@ -53,6 +53,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [colors, setColors] = useState<Set<string>>(new Set())
   const [rarity, setRarity] = useState('')
   const [cardType, setCardType] = useState('')
+  const [cmc, setCmc] = useState('')
   const [setCode, setSetCode] = useState('')
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
@@ -104,6 +105,7 @@ export default function CubePage({ role }: { role: Role }) {
         (showExcluded || !c.excluded) &&
         (show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))) &&
         (!rarity || c.rarity === rarity) &&
+        (!cmc || (cmc === '7' ? c.cmc >= 7 : c.cmc === Number(cmc))) &&
         (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
         [...colors].every((col) => (col === 'C' ? !c.colors : c.colors.includes(col))) &&
         [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
@@ -117,7 +119,7 @@ export default function CubePage({ role }: { role: Role }) {
         a.set_code.localeCompare(b.set_code) || parseInt(a.number, 10) - parseInt(b.number, 10),
     }
     return result.sort(sorters[sort])
-  }, [cards, sets, copies, text, colors, rarity, cardType, setCode, sort, showExcluded, show])
+  }, [cards, sets, copies, text, colors, rarity, cardType, cmc, setCode, sort, showExcluded, show])
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
@@ -196,6 +198,15 @@ export default function CubePage({ role }: { role: Role }) {
               {label}
             </option>
           ))}
+        </select>
+        <select id="cmc" aria-label="Manawert" value={cmc} onChange={(e) => setCmc(e.target.value)}>
+          <option value="">Jeder Manawert</option>
+          {['0', '1', '2', '3', '4', '5', '6'].map((n) => (
+            <option key={n} value={n}>
+              {n} Mana
+            </option>
+          ))}
+          <option value="7">7+ Mana</option>
         </select>
         <select id="rarity" aria-label="Seltenheit" value={rarity} onChange={(e) => setRarity(e.target.value)}>
           <option value="">Alle Seltenheiten</option>
