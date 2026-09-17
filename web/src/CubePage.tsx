@@ -121,6 +121,8 @@ export default function CubePage({ role }: { role: Role }) {
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
+  // Cardmarket price of the English print, times the copies you own.
+  const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * (copies.get(c.id) ?? 0), 0)
 
   // Editors change the number of scanned copies right here.
   async function changeCopies(card: Card, delta: number) {
@@ -225,7 +227,7 @@ export default function CubePage({ role }: { role: Role }) {
         </select>
       </div>
       <p className="muted summary">
-        {ownedCount} Karten · {copyCount} Kopien
+        {ownedCount} Karten · {copyCount} Kopien · {euro(value)}
       </p>
 
       {error ? (
