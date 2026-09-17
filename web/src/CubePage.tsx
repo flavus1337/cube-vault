@@ -3,7 +3,7 @@ import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type R
 
 const RARITY: Record<string, string> = {
   common: 'Gewöhnlich',
-  uncommon: 'Nicht gewöhnlich',
+  uncommon: 'Ungewöhnlich',
   rare: 'Selten',
   mythic: 'Mythisch selten',
 }
@@ -150,6 +150,7 @@ export default function CubePage({ role }: { role: Role }) {
     const { error } = await supabase.rpc(delta > 0 ? 'add_copy' : 'remove_copy', {
       p_print_id: printId,
       p_card_id: card.id,
+      p_source: 'web', // the history says where a change came from
       ...(delta > 0 ? { p_lang: known[0]?.lang ?? 'en' } : {}),
     })
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)

@@ -37,7 +37,7 @@ String typeLine(Map<String, Object?> c) {
 
 const rarityDe = {
   'common': 'Gewöhnlich',
-  'uncommon': 'Nicht gewöhnlich',
+  'uncommon': 'Ungewöhnlich',
   'rare': 'Selten',
   'mythic': 'Mythisch selten',
 };

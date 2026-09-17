@@ -24,6 +24,9 @@ const ACTIONS: Record<string, string> = {
   player_role: 'Rolle geändert',
 }
 
+// What the copy_added / copy_removed events record as their source.
+const SOURCES: Record<string, string> = { scan: 'Scanner', web: 'Website' }
+
 const ROLES: Record<Role, string> = {
   waiting: 'Wartet',
   player: 'Spieler',
@@ -95,7 +98,7 @@ export function HistoryPage() {
                   </td>
                   <td>{e.set_code?.toUpperCase()}</td>
                   <td className="num">{e.delta ? (e.delta > 0 ? `+${e.delta}` : e.delta) : ''}</td>
-                  <td>{e.note}</td>
+                  <td>{e.note ? (SOURCES[e.note] ?? e.note) : ''}</td>
                 </tr>
               ))}
             </tbody>
