@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 
+import 'app_theme.dart';
 import 'db.dart';
 import 'main.dart';
 
@@ -61,7 +62,7 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) return const _LoadingPage();
     if (Db.session == null) return const _LoginPage();
     if (_error != null || _role == null || _role == 'waiting') {
       return _WaitingPage(error: _error, onRetry: _loadRole);
@@ -70,36 +71,93 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
+class _LoadingPage extends StatelessWidget {
+  const _LoadingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _AuthScaffold(
+      children: [
+        VaultLogo(height: 88),
+        SizedBox(height: 28),
+        CircularProgressIndicator(),
+      ],
+    );
+  }
+}
+
 class _LoginPage extends StatelessWidget {
   const _LoginPage();
 
   @override
   Widget build(BuildContext context) {
+    return _AuthScaffold(
+      children: [
+        const VaultLogo(height: 104),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            icon: const Icon(Icons.login),
+            label: const Text('Mit Discord anmelden'),
+            onPressed: () async {
+              try {
+                await Db.loginWithDiscord();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Login fehlgeschlagen: $e')),
+                  );
+                }
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthScaffold extends StatelessWidget {
+  final List<Widget> children;
+
+  const _AuthScaffold({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Cube Vault', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                icon: const Icon(Icons.login),
-                label: const Text('Mit Discord anmelden'),
-                onPressed: () async {
-                  try {
-                    await Db.loginWithDiscord();
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('Login fehlgeschlagen: $e')));
-                    }
-                  }
-                },
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [VaultColors.ink, VaultColors.surfaceHigh],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 48,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: children,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -114,24 +172,32 @@ class _WaitingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                error == null ? 'Warte auf Freigabe durch einen Admin.' : 'Fehler: $error',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              FilledButton(onPressed: onRetry, child: const Text('Erneut prüfen')),
-              TextButton(onPressed: Db.logout, child: const Text('Abmelden')),
-            ],
+    return _AuthScaffold(
+      children: [
+        const VaultLogo(height: 88),
+        const SizedBox(height: 24),
+        Icon(
+          error == null ? Icons.hourglass_top : Icons.error_outline,
+          color: error == null ? VaultColors.brass : VaultColors.error,
+          size: 40,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          error == null
+              ? 'Warte auf Freigabe durch einen Admin.'
+              : 'Fehler: $error',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: onRetry,
+            child: const Text('Erneut prüfen'),
           ),
         ),
-      ),
+        TextButton(onPressed: Db.logout, child: const Text('Abmelden')),
+      ],
     );
   }
 }

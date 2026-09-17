@@ -8,6 +8,14 @@ const RARITY: Record<string, string> = {
   mythic: 'Mythisch selten',
 }
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
+const COLOR_LABELS: Record<string, string> = {
+  W: 'Weiß',
+  U: 'Blau',
+  B: 'Schwarz',
+  R: 'Rot',
+  G: 'Grün',
+  C: 'Farblos',
+}
 // German label with the words to look for in the type line (German or English).
 const TYPES: [string, RegExp][] = [
   ['Kreatur', /Kreatur|Creature/i],
@@ -174,6 +182,7 @@ export default function CubePage({ role }: { role: Role }) {
 
   return (
     <main className="page">
+      <h1 className="cube-title">Cube</h1>
       <div className="toolbar">
         <input
           id="search"
@@ -188,6 +197,7 @@ export default function CubePage({ role }: { role: Role }) {
             <button
               key={col}
               className={`pip pip-${col}`}
+              aria-label={`${COLOR_LABELS[col]} filtern`}
               aria-pressed={colors.has(col)}
               onClick={() => {
                 const next = new Set(colors)
@@ -283,6 +293,7 @@ export default function CubePage({ role }: { role: Role }) {
                 onClick={() => setSelected(c)}
               >
                 {c.image ? <img src={c.image} alt={name(c)} loading="lazy" /> : <div className="noimg">{name(c)}</div>}
+                {!count && <span className="sr-only">Fehlt in der Sammlung</span>}
                 {count > 0 && <span className="badge">{count}×</span>}
                 {c.excluded && <span className="badge out">ausgeschlossen</span>}
               </button>
@@ -342,9 +353,9 @@ function CardDialog(props: {
   }, [card.image])
 
   return (
-    <dialog ref={ref} className="detail" onClose={onClose}>
+    <dialog ref={ref} className="detail" aria-labelledby="card-detail-title" onClose={onClose}>
       {card.image && <img src={hiRes ?? card.image} alt={name(card)} />}
-      <h2>{name(card)}</h2>
+      <h2 id="card-detail-title">{name(card)}</h2>
       {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
       <p>{type(card)}</p>
       <p className="rules">{card.text_de || card.oracle_text}</p>

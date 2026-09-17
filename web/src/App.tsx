@@ -51,7 +51,9 @@ export default function App() {
   if (!session) {
     return (
       <div className="center gate">
-        <h1>Cube Vault</h1>
+        <h1 className="gate-title">
+          <img className="gate-logo" src="./logo.png" alt="Cube Vault" />
+        </h1>
         <p className="muted">Der Cube ist nur für freigegebene Spieler sichtbar.</p>
         <button
           className="primary"
@@ -85,7 +87,9 @@ export default function App() {
   if (!profile || profile.role === 'waiting') {
     return (
       <div className="center gate">
-        <h1>Cube Vault</h1>
+        <h1 className="gate-title">
+          <img className="gate-logo" src="./logo.png" alt="Cube Vault" />
+        </h1>
         <p>{profile ? 'Warte auf Freigabe durch einen Admin.' : 'Dein Profil wurde nicht gefunden.'}</p>
         <p className="muted">Sobald du freigegeben bist, lade die Seite neu.</p>
         <button onClick={logout}>Abmelden</button>
@@ -104,8 +108,10 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <strong className="brand">Cube Vault</strong>
-        <nav>
+        <a className="brand" href="#/cube" aria-label="Cube Vault">
+          <img src="./logo.png" alt="" />
+        </a>
+        <nav aria-label="Hauptnavigation">
           {nav.map(([path, label]) => (
             <a key={path} href={`#${path}`} aria-current={route === path ? 'page' : undefined}>
               {label}
