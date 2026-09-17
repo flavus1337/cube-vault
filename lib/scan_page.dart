@@ -42,9 +42,11 @@ class _ScanPageState extends State<ScanPage> {
   Set<String> _knownSets = const {};
 
   _Found? _last;
-  DateTime _lastSeen = DateTime(0);
-  // The same card counts again only after it was out of view this long.
-  static const _gone = Duration(milliseconds: 2500);
+  // The card just counted. It counts again only after the camera saw nothing
+  // for a few frames, which means the card was taken out of the picture.
+  String? _countedCardId;
+  int _framesWithoutCard = 0;
+  static const _framesUntilGone = 3;
   int _ocrMs = 0;
   int _added = 0;
 
@@ -137,6 +139,9 @@ class _ScanPageState extends State<ScanPage> {
 
   Future<void> _handle(CardHit? hit) async {
     if (hit == null) {
+      if (_countedCardId != null && ++_framesWithoutCard >= _framesUntilGone) {
+        _countedCardId = null;
+      }
       if (_candidate != null && mounted) {
         setState(() {
           _candidate = null;
@@ -150,11 +155,11 @@ class _ScanPageState extends State<ScanPage> {
     _lastHitAt = now;
     final count = _seen[hit.key] = (_seen[hit.key] ?? 0) + 1;
 
-    // Same card still in front of the camera: don't count it again. Checked on
-    // every read, because a read takes up to a second.
+    // Same card still in front of the camera: don't count it again. OCR can
+    // read a different number on the same card, so the card id decides.
     final known = _cache[hit.key]?.card;
-    if (known != null && known['id'] == _last?.card?['id'] && now.difference(_lastSeen) < _gone) {
-      _lastSeen = now;
+    if (known != null && known['id'] == _countedCardId) {
+      _framesWithoutCard = 0;
       return;
     }
     if (_candidate != hit.key) {
@@ -205,6 +210,13 @@ class _ScanPageState extends State<ScanPage> {
     if (found == null || card == null || found.problem != null) return;
     final lookupMs = watch.elapsedMilliseconds;
 
+    // A lookup can take seconds, and in that time this can become the card
+    // that was just counted.
+    if (card['id'] == _countedCardId) {
+      _framesWithoutCard = 0;
+      return;
+    }
+
     // One read is enough when the name on the card matches the card we found.
     // Only a misread number could put the wrong card in, and a wrong number
     // almost never belongs to a card with the same name.
@@ -228,8 +240,9 @@ class _ScanPageState extends State<ScanPage> {
       'scan ${hit.key}: $count reads (ocr ${_ocrMs}ms per frame), lookup ${lookupMs}ms, save ${watch.elapsedMilliseconds - lookupMs}ms',
     );
     HapticFeedback.heavyImpact();
-    _lastSeen = DateTime.now();
-    _status = 'Karte in den Rahmen halten';
+    _countedCardId = card['id'] as String?;
+    _framesWithoutCard = 0;
+    _status = 'Karte weglegen, nächste Karte scannen';
     if (!mounted) return;
     setState(() {
       _last = found;
@@ -529,6 +542,7 @@ class _ScanPageState extends State<ScanPage> {
                                 setState(() {
                                   _last = null;
                                   _added--;
+                                  _countedCardId = null; // scanning it again is fine now
                                 });
                                 _showFlash('Entfernt', Colors.grey, Icons.undo);
                               },
