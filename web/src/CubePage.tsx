@@ -17,7 +17,6 @@ const TYPES: [string, RegExp][] = [
   ['Verzauberung', /Verzauberung|Enchantment/i],
   ['Artefakt', /Artefakt|Artifact/i],
   ['Planeswalker', /Planeswalker/i],
-  ['Kampf', /Kampf|Battle/i],
 ]
 
 const countCopies = (rows: Copy[]) => {
