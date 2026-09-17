@@ -8,15 +8,32 @@ const _headers = {'User-Agent': 'MtgScanner/0.1', 'Accept': 'application/json'};
 /// Returns null when Scryfall does not know the card. Network errors throw.
 Future<Map<String, dynamic>?> _get(String path, [Map<String, String>? query]) async {
   final uri = Uri.https('api.scryfall.com', path, query);
-  var res = await http.get(uri, headers: _headers);
+  var res = await _fetch(uri);
   // 429 = too many requests. Wait as long as Scryfall asks, at most twice.
   for (var tries = 0; res.statusCode == 429 && tries < 2; tries++) {
     await Future.delayed(Duration(seconds: int.tryParse(res.headers['retry-after'] ?? '') ?? 15));
-    res = await http.get(uri, headers: _headers);
+    res = await _fetch(uri);
   }
   if (res.statusCode == 404) return null;
   if (res.statusCode != 200) throw http.ClientException('Scryfall ${res.statusCode}');
   return jsonDecode(res.body) as Map<String, dynamic>;
+}
+
+// One client for all requests: it keeps the connection open, which saves a
+// handshake on a slow mobile network.
+final _client = http.Client();
+
+/// On mobile data a request can hang or the connection can drop, so it gets
+/// a time limit and two more attempts.
+Future<http.Response> _fetch(Uri uri) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      return await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      if (attempt >= 3) rethrow;
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+  }
 }
 
 // Language code printed on the card -> Scryfall language code.
