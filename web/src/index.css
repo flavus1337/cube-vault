@@ -95,3 +95,6 @@ tr.waiting td { background: #e8a24a14; }
 .import input { width: 120px; }
 .import > p { flex-basis: 100%; margin: 0; }
 .progress { flex-basis: 100%; margin: 0; }
+
+.topbar .apk { color: var(--muted); text-decoration: none; font-size: 14px; }
+.topbar .apk:hover { color: var(--text); }

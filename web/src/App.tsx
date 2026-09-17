@@ -58,12 +58,22 @@ export default function App() {
           onClick={() =>
             supabase.auth.signInWithOAuth({
               provider: 'discord',
-              options: { redirectTo: location.origin + location.pathname },
+              options: {
+                redirectTo: location.origin + location.pathname,
+                // Discord skips its own screen once you have authorized the app.
+                queryParams: { prompt: 'none' },
+              },
             })
           }
         >
           Mit Discord anmelden
         </button>
+        <p className="muted">
+          Zum Scannen:{' '}
+          <a href="https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk">
+            Android-App laden
+          </a>
+        </p>
       </div>
     )
   }
@@ -79,6 +89,7 @@ export default function App() {
     )
   }
 
+  const APK_URL = 'https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk'
   const nav = [
     ['/cube', 'Cube'],
     ['/history', 'Verlauf'],
@@ -97,6 +108,9 @@ export default function App() {
             </a>
           ))}
         </nav>
+        <a className="apk" href={APK_URL}>
+          Android-App
+        </a>
         <div className="me">
           {profile.avatar_url && <img src={profile.avatar_url} alt="" />}
           <span>{profile.name}</span>

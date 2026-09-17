@@ -17,6 +17,8 @@ class Db {
     OAuthProvider.discord,
     redirectTo: 'de.prigl.mtgscanner://login-callback',
     authScreenLaunchMode: LaunchMode.externalApplication,
+    // Discord skips its own screen once you have authorized the app.
+    queryParams: const {'prompt': 'none'},
   );
 
   static Future<void> logout() => _sb.auth.signOut();
