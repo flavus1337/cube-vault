@@ -39,6 +39,9 @@ final _setLine = RegExp(
 // "0123 R", "123/280 U", "R 0123", and OCR noise in front of it like "MO339".
 final _numberLine = RegExp(r'^\s*\D{0,3}\s*0*(\d{1,4})(?:\s*/\s*\d{1,4})?\s*[CURMSLTP]?\s*$');
 
+// The number at the end of a line: "… Wizards of the Coast 384", "384/402 U".
+final _trailingNumber = RegExp(r'(?:^|\s)0*(\d{1,4})(?:\s*/\s*\d{1,4})?\s*[CURMSLTP]?\s*$');
+
 // Characters OCR mixes up in the tiny set code line.
 const _confusable = ['0ODQ', '1IL7T', '2Z', '5S', '6G', '8B', 'MN', 'UV', 'CG'];
 
@@ -87,12 +90,14 @@ CardHit? parseCard(List<OcrLine> lines, {Set<String> knownSets = const {}}) {
     }
   }
 
-  // Retro frame: no set code line, so the number alone has to do. It sits in
-  // the bottom half, and the name has to confirm the card later.
-  if (name != null) {
+  // Retro frame: no set code line. The number is the last one in the bottom
+  // area, often at the end of the copyright line ("… Wizards of the Coast 384").
+  if (lines.isNotEmpty) {
     final bottom = lines.map((l) => l.box.bottom).reduce((a, b) => a > b ? a : b);
-    for (final line in lines.where((l) => l.box.top > bottom * 0.6)) {
-      final n = _numberLine.firstMatch(line.text);
+    final low = lines.where((l) => l.box.top > bottom * 0.6).toList()
+      ..sort((a, b) => a.box.top.compareTo(b.box.top));
+    for (final line in low.reversed) {
+      final n = _trailingNumber.firstMatch(line.text);
       if (n != null) return CardHit(null, n[1]!, null, name);
     }
   }

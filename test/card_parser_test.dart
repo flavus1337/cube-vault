@@ -62,6 +62,18 @@ void main() {
     expect(hit?.name, 'Kloster in der Flasche');
   });
 
+  test('retro frame: number at the end of the copyright line', () {
+    final hit = parseCard([
+      line('Zeitschlaufe', 30, 20),
+      line('Wirf eine Münze.', 30, 500),
+      line('Illus. Jon Foster', 30, 850),
+      line('M & C 2024 Wizards of the Coast 384', 30, 868),
+    ]);
+    expect(hit?.set, isNull);
+    expect(hit?.number, '384');
+    expect(hit?.name, 'Zeitschlaufe');
+  });
+
   test('nothing readable', () {
     expect(parseCard([line('3/3', 30, 20)]), isNull);
   });

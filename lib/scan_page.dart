@@ -312,19 +312,52 @@ class _ScanPageState extends State<ScanPage> {
   /// the cube and only the card whose name matches the read name is taken.
   Future<Map<String, dynamic>?> _findInCubeSets(CardHit hit) async {
     final name = hit.name;
-    if (name == null) return null;
     bool matches(Map<String, dynamic> json) =>
-        _nameMatches(name, {'name': json['name'], 'name_de': json['printed_name']});
+        name != null && _nameMatches(name, {'name': json['name'], 'name_de': json['printed_name']});
 
+    final candidates = <Map<String, dynamic>>[];
     for (final set in _knownSets) {
       final json = await fetchBySetNumber(set, hit.number, hit.lang);
-      if (json != null && matches(json)) return json;
+      if (json == null) continue;
+      if (matches(json)) return json;
+      candidates.add(json);
     }
     // The tiny number is easy to misread, so the name alone can find the card.
-    for (final json in await searchInSets(name, _knownSets)) {
-      if (matches(json)) return json;
+    if (name != null) {
+      for (final json in await searchInSets(name, _knownSets)) {
+        if (matches(json)) return json;
+      }
     }
-    return null;
+    // Name unreadable or different: let the user pick instead of failing.
+    return candidates.isEmpty ? null : _askWhichCard(candidates);
+  }
+
+  Future<Map<String, dynamic>?> _askWhichCard(List<Map<String, dynamic>> candidates) async {
+    if (!mounted) return null;
+    HapticFeedback.mediumImpact();
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Welche Karte ist das?'),
+        children: [
+          for (final card in candidates)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, card),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Image.network(
+                  '${(card['image_uris'] ?? (card['card_faces'] as List?)?.first['image_uris'])?['normal']}',
+                  width: 40,
+                  errorBuilder: (_, _, _) => const Icon(Icons.image_not_supported),
+                ),
+                title: Text('${card['printed_name'] ?? card['name']}'),
+                subtitle: Text('${'${card['set']}'.toUpperCase()} #${card['collector_number']}'),
+              ),
+            ),
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx), child: const Text('Keine davon')),
+        ],
+      ),
+    );
   }
 
   // Scanning pauses while the dialog is open: frames are skipped while busy.
