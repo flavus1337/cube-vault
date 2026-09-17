@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_theme.dart';
 import 'db.dart';
 import 'login_page.dart';
 import 'scan_page.dart';
@@ -13,7 +14,7 @@ Future<void> main() async {
   runApp(
     MaterialApp(
       title: 'Cube Vault',
-      theme: ThemeData(colorSchemeSeed: Colors.deepOrange, brightness: Brightness.dark),
+      theme: buildVaultTheme(),
       home: const AuthGate(),
     ),
   );
@@ -28,7 +29,8 @@ String pngImage(Object? url) =>
 
 String displayName(Map<String, Object?> c) => '${c['name_de'] ?? c['name']}';
 
-String printLabel(Map<String, Object?> c) => '${'${c['set_code']}'.toUpperCase()} #${c['number']}';
+String printLabel(Map<String, Object?> c) =>
+    '${'${c['set_code']}'.toUpperCase()} #${c['number']}';
 
 String typeLine(Map<String, Object?> c) {
   final de = c['type_de'] as String?;
@@ -40,6 +42,15 @@ const rarityDe = {
   'uncommon': 'Nicht gewöhnlich',
   'rare': 'Selten',
   'mythic': 'Mythisch selten',
+};
+
+const _colorNames = {
+  'W': 'Weiß',
+  'U': 'Blau',
+  'B': 'Schwarz',
+  'R': 'Rot',
+  'G': 'Grün',
+  'C': 'Farblos',
 };
 
 String _price(Map<String, Object?> c) {
@@ -84,7 +95,10 @@ class _CollectionPageState extends State<CollectionPage> {
           title: const Text('Update verfügbar'),
           content: Text('Version $tag ist da, du hast $current.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Später')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Später'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Herunterladen'),
@@ -93,7 +107,12 @@ class _CollectionPageState extends State<CollectionPage> {
         ),
       );
       // The browser downloads the APK, Android installs it over this version.
-      if (install == true) await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
+      if (install == true) {
+        await launchUrl(
+          Uri.parse(apkUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      }
     } catch (e) {
       debugPrint('update check: $e'); // no network, GitHub down: not important
     }
@@ -125,7 +144,9 @@ class _CollectionPageState extends State<CollectionPage> {
         c['set_code'],
       ].join(' ').toLowerCase();
       return haystack.contains(text) &&
-          _colors.every((col) => col == 'C' ? colors.isEmpty : colors.contains(col)) &&
+          _colors.every(
+            (col) => col == 'C' ? colors.isEmpty : colors.contains(col),
+          ) &&
           (_rarity == null || c['rarity'] == _rarity) &&
           // The cube is what you own; missing cards only exist after a whole-set import.
           (_missingOnly ? c['qty'] == 0 : c['qty'] != 0);
@@ -138,7 +159,9 @@ class _CollectionPageState extends State<CollectionPage> {
         final d = '${a['set_code']}'.compareTo('${b['set_code']}');
         return d != 0
             ? d
-            : (int.tryParse('${a['number']}') ?? 0).compareTo(int.tryParse('${b['number']}') ?? 0);
+            : (int.tryParse('${a['number']}') ?? 0).compareTo(
+                int.tryParse('${b['number']}') ?? 0,
+              );
       },
       'cmc' => (a, b) {
         final d = ((a['cmc'] as num?) ?? 0).compareTo((b['cmc'] as num?) ?? 0);
@@ -152,13 +175,15 @@ class _CollectionPageState extends State<CollectionPage> {
   Future<void> _details(Map<String, Object?> c) async {
     // Scanned prints of this card (variants, languages), most copies first.
     final prints = [
-      for (final p in c['copies'] as List) {'print_id': p['print_id'], 'qty': p['qty']},
+      for (final p in c['copies'] as List)
+        {'print_id': p['print_id'], 'qty': p['qty']},
     ]..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
     var qty = c['qty'] as int;
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           Future<void> change(int delta) async {
@@ -171,7 +196,9 @@ class _CollectionPageState extends State<CollectionPage> {
                   : await Db.removeCopy(printId, c['id'] as String);
             } catch (e) {
               if (ctx.mounted) {
-                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text('Fehler: $e')));
               }
               return;
             }
@@ -185,35 +212,54 @@ class _CollectionPageState extends State<CollectionPage> {
             });
           }
 
-          return Padding(
-            padding: const EdgeInsets.all(16),
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (c['image'] != null)
-                  Flexible(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.55,
+                    ),
                     // The small image is already cached from the list; the PNG fades in over it.
                     child: FadeInImage(
                       placeholder: NetworkImage('${c['image']}'),
                       image: NetworkImage(pngImage(c['image'])),
+                      fit: BoxFit.contain,
                       fadeInDuration: const Duration(milliseconds: 150),
                     ),
                   ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 if (c['name_de'] != null) Text('${c['name']}'),
+                const SizedBox(height: 4),
                 Text(typeLine(c), textAlign: TextAlign.center),
-                Text('${printLabel(c)} · ${rarityDe[c['rarity']] ?? c['rarity']} · ${_price(c)}'),
+                const SizedBox(height: 4),
+                Text(
+                  '${printLabel(c)} · ${rarityDe[c['rarity']] ?? c['rarity']} · ${_price(c)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: VaultColors.brass),
+                ),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.canEdit)
                       IconButton(
+                        tooltip: 'Eine Kopie entfernen',
                         icon: const Icon(Icons.remove),
                         onPressed: qty > 0 ? () => change(-1) : null,
                       ),
-                    Text('$qty× gescannt', style: Theme.of(ctx).textTheme.titleLarge),
+                    Text(
+                      '$qty× gescannt',
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
                     if (widget.canEdit)
-                      IconButton(icon: const Icon(Icons.add), onPressed: () => change(1)),
+                      IconButton(
+                        tooltip: 'Eine Kopie hinzufügen',
+                        icon: const Icon(Icons.add),
+                        onPressed: () => change(1),
+                      ),
                   ],
                 ),
               ],
@@ -232,9 +278,19 @@ class _CollectionPageState extends State<CollectionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${owned.length} Karten · $copies Kopien'),
+        title: Row(
+          children: [
+            const VaultLogo(compact: true, height: 34),
+            const SizedBox(width: 10),
+            Flexible(child: Text('${owned.length} Karten · $copies Kopien')),
+          ],
+        ),
         actions: [
-          IconButton(tooltip: 'Abmelden', icon: const Icon(Icons.logout), onPressed: Db.logout),
+          IconButton(
+            tooltip: 'Abmelden',
+            icon: const Icon(Icons.logout),
+            onPressed: Db.logout,
+          ),
         ],
       ),
       floatingActionButton: widget.canEdit
@@ -242,7 +298,10 @@ class _CollectionPageState extends State<CollectionPage> {
               icon: const Icon(Icons.document_scanner),
               label: const Text('Scannen'),
               onPressed: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage()));
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ScanPage()),
+                );
                 _load();
               },
             )
@@ -269,22 +328,40 @@ class _CollectionPageState extends State<CollectionPage> {
                 for (final color in const ['W', 'U', 'B', 'R', 'G', 'C'])
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
-                    child: FilterChip(
-                      label: Text(color),
+                    child: Semantics(
+                      label: 'Farbe ${_colorNames[color]} filtern',
+                      button: true,
                       selected: _colors.contains(color),
+                      excludeSemantics: true,
+                      child: Tooltip(
+                        message: _colorNames[color]!,
+                        child: FilterChip(
+                          label: Text(color),
+                          selected: _colors.contains(color),
+                          onSelected: (on) {
+                            on ? _colors.add(color) : _colors.remove(color);
+                            _apply();
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                Semantics(
+                  label: 'Nur fehlende Karten anzeigen',
+                  button: true,
+                  selected: _missingOnly,
+                  excludeSemantics: true,
+                  child: Tooltip(
+                    message: 'Nur fehlende Karten',
+                    child: FilterChip(
+                      label: const Text('Fehlend'),
+                      selected: _missingOnly,
                       onSelected: (on) {
-                        on ? _colors.add(color) : _colors.remove(color);
+                        _missingOnly = on;
                         _apply();
                       },
                     ),
                   ),
-                FilterChip(
-                  label: const Text('Fehlend'),
-                  selected: _missingOnly,
-                  onSelected: (on) {
-                    _missingOnly = on;
-                    _apply();
-                  },
                 ),
                 const SizedBox(width: 12),
                 DropdownButton<String?>(
@@ -336,21 +413,41 @@ class _CollectionPageState extends State<CollectionPage> {
                       itemBuilder: (_, i) {
                         final c = _cards[i];
                         final qty = c['qty'] as int;
-                        return ListTile(
-                          leading: c['image'] == null
-                              ? null
-                              : Opacity(
-                                  opacity: qty == 0 ? 0.4 : 1, // missing cards look faded
-                                  child: Image.network('${c['image']}', width: 40),
-                                ),
-                          title: Text(displayName(c)),
-                          subtitle: Text(
-                            '${printLabel(c)} · ${typeLine(c)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
                           ),
-                          trailing: Text('$qty×'),
-                          onTap: () => _details(c),
+                          child: ListTile(
+                            leading: c['image'] == null
+                                ? null
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Opacity(
+                                      opacity: qty == 0
+                                          ? 0.4
+                                          : 1, // missing cards look faded
+                                      child: Image.network(
+                                        '${c['image']}',
+                                        width: 40,
+                                      ),
+                                    ),
+                                  ),
+                            title: Text(displayName(c)),
+                            subtitle: Text(
+                              '${printLabel(c)} · ${typeLine(c)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Text(
+                              '$qty×',
+                              style: const TextStyle(
+                                color: VaultColors.brass,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            onTap: () => _details(c),
+                          ),
                         );
                       },
                     ),

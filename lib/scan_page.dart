@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'app_theme.dart';
 import 'card_parser.dart';
 import 'db.dart';
 import 'main.dart' show displayName, largeImage, printLabel;
@@ -13,7 +14,12 @@ import 'scryfall.dart';
 
 /// Lookup result for one read. [card] is the cube card; [problem] explains
 /// why a print can't be counted (e.g. its set is not in the cube).
-typedef _Found = ({String printId, String lang, Map<String, Object?>? card, String? problem});
+typedef _Found = ({
+  String printId,
+  String lang,
+  Map<String, Object?>? card,
+  String? problem,
+});
 
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
@@ -51,7 +57,8 @@ class _ScanPageState extends State<ScanPage> {
   int _added = 0;
 
   // Short confirmation over the camera after each scan result.
-  ({String title, String? subtitle, String? image, Color color, IconData icon})? _flash;
+  ({String title, String? subtitle, String? image, Color color, IconData icon})?
+  _flash;
   Timer? _flashTimer;
 
   void _showFlash(
@@ -64,7 +71,13 @@ class _ScanPageState extends State<ScanPage> {
   }) {
     _flashTimer?.cancel();
     setState(
-      () => _flash = (title: title, subtitle: subtitle, image: image, color: color, icon: icon),
+      () => _flash = (
+        title: title,
+        subtitle: subtitle,
+        image: image,
+        color: color,
+        icon: icon,
+      ),
     );
     _flashTimer = Timer(duration, () {
       if (mounted) setState(() => _flash = null);
@@ -76,7 +89,9 @@ class _ScanPageState extends State<ScanPage> {
     super.initState();
     WakelockPlus.enable(); // the screen must not switch off while scanning
     _start();
-    Db.setCodes().then((codes) => _knownSets = codes).catchError((_) => const <String>{});
+    Db.setCodes()
+        .then((codes) => _knownSets = codes)
+        .catchError((_) => const <String>{});
   }
 
   Future<void> _start() async {
@@ -94,7 +109,9 @@ class _ScanPageState extends State<ScanPage> {
       );
       await ctrl.initialize();
       if (!mounted) return ctrl.dispose();
-      await ctrl.startImageStream((img) => _onFrame(img, cam.sensorOrientation));
+      await ctrl.startImageStream(
+        (img) => _onFrame(img, cam.sensorOrientation),
+      );
       setState(() => _cam = ctrl);
     } catch (e) {
       setState(() => _error = '$e');
@@ -125,9 +142,12 @@ class _ScanPageState extends State<ScanPage> {
       _ocrMs = ocrWatch.elapsedMilliseconds;
       final hit = parseCard(lines, knownSets: _knownSets);
       // Diagnosis: when nothing is readable, log what the camera saw.
-      if (hit == null && DateTime.now().difference(_lastLogAt) > const Duration(seconds: 2)) {
+      if (hit == null &&
+          DateTime.now().difference(_lastLogAt) > const Duration(seconds: 2)) {
         _lastLogAt = DateTime.now();
-        debugPrint('read nothing (${_ocrMs}ms): ${lines.map((l) => l.text).join(' | ')}');
+        debugPrint(
+          'read nothing (${_ocrMs}ms): ${lines.map((l) => l.text).join(' | ')}',
+        );
       }
       await _handle(hit);
     } catch (e) {
@@ -185,7 +205,9 @@ class _ScanPageState extends State<ScanPage> {
         _cache[hit.key] = await _lookup(hit);
       } catch (e) {
         debugPrint('lookup ${hit.key} failed: $e');
-        if (mounted) _showFlash('Keine Verbindung', Colors.orange, Icons.wifi_off);
+        if (mounted) {
+          _showFlash('Keine Verbindung', VaultColors.warning, Icons.wifi_off);
+        }
         return;
       }
       final found = _cache[hit.key];
@@ -194,11 +216,16 @@ class _ScanPageState extends State<ScanPage> {
         'lookup ${hit.key}: ${found == null ? 'unknown to Scryfall' : found.problem ?? 'ok'}',
       );
       if (found == null) {
-        _showFlash('Nicht gefunden', Colors.red, Icons.close, subtitle: hit.key);
+        _showFlash(
+          'Nicht gefunden',
+          VaultColors.error,
+          Icons.close,
+          subtitle: hit.key,
+        );
       } else if (found.problem != null) {
         _showFlash(
           found.problem!,
-          Colors.red,
+          VaultColors.error,
           Icons.block,
           subtitle: hit.key,
           image: found.card?['image'] as String?,
@@ -233,7 +260,13 @@ class _ScanPageState extends State<ScanPage> {
       qty = await Db.addCopy(found.printId, card['id'] as String, found.lang);
     } catch (e) {
       debugPrint('save ${hit.key} failed: $e');
-      if (mounted) _showFlash('Speichern fehlgeschlagen', Colors.orange, Icons.cloud_off);
+      if (mounted) {
+        _showFlash(
+          'Speichern fehlgeschlagen',
+          VaultColors.warning,
+          Icons.cloud_off,
+        );
+      }
       return;
     }
     debugPrint(
@@ -276,7 +309,12 @@ class _ScanPageState extends State<ScanPage> {
     final setCode = json['set'] as String;
     final oracleId = oracleIdOf(json);
     if (oracleId == null) {
-      return (printId: printId, lang: lang, card: null, problem: 'Karte ohne Oracle-ID');
+      return (
+        printId: printId,
+        lang: lang,
+        card: null,
+        problem: 'Karte ohne Oracle-ID',
+      );
     }
 
     var card = await Db.findCard(setCode, oracleId);
@@ -294,7 +332,9 @@ class _ScanPageState extends State<ScanPage> {
         if (set == null) return null;
         // A bonus sheet or commander deck of a set in the cube joins silently.
         final parent = set['parent_set_code'] as String?;
-        var parentCode = parent != null && await Db.findSet(parent) != null ? parent : null;
+        var parentCode = parent != null && await Db.findSet(parent) != null
+            ? parent
+            : null;
         if (parentCode == null) {
           final answer = await _askNewSet('${json['set_name']}');
           if (answer == null) {
@@ -312,7 +352,7 @@ class _ScanPageState extends State<ScanPage> {
         if (mounted) {
           _showFlash(
             'Lade ${set['name']} …',
-            Colors.blueGrey,
+            VaultColors.info,
             Icons.downloading,
             subtitle: 'alle Karten des Sets',
             duration: const Duration(minutes: 1), // replaced by the next flash
@@ -342,7 +382,11 @@ class _ScanPageState extends State<ScanPage> {
   Future<Map<String, dynamic>?> _findInCubeSets(CardHit hit) async {
     final name = hit.name;
     bool matches(Map<String, dynamic> json) =>
-        name != null && _nameMatches(name, {'name': json['name'], 'name_de': json['printed_name']});
+        name != null &&
+        _nameMatches(name, {
+          'name': json['name'],
+          'name_de': json['printed_name'],
+        });
 
     final candidates = <Map<String, dynamic>>[];
     for (final set in _knownSets) {
@@ -361,7 +405,9 @@ class _ScanPageState extends State<ScanPage> {
     return candidates.isEmpty ? null : _askWhichCard(candidates);
   }
 
-  Future<Map<String, dynamic>?> _askWhichCard(List<Map<String, dynamic>> candidates) async {
+  Future<Map<String, dynamic>?> _askWhichCard(
+    List<Map<String, dynamic>> candidates,
+  ) async {
     if (!mounted) return null;
     HapticFeedback.mediumImpact();
     return showDialog<Map<String, dynamic>>(
@@ -377,13 +423,19 @@ class _ScanPageState extends State<ScanPage> {
                 leading: Image.network(
                   '${(card['image_uris'] ?? (card['card_faces'] as List?)?.first['image_uris'])?['normal']}',
                   width: 40,
-                  errorBuilder: (_, _, _) => const Icon(Icons.image_not_supported),
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.image_not_supported),
                 ),
                 title: Text('${card['printed_name'] ?? card['name']}'),
-                subtitle: Text('${'${card['set']}'.toUpperCase()} #${card['collector_number']}'),
+                subtitle: Text(
+                  '${'${card['set']}'.toUpperCase()} #${card['collector_number']}',
+                ),
               ),
             ),
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx), child: const Text('Keine davon')),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keine davon'),
+          ),
         ],
       ),
     );
@@ -422,7 +474,7 @@ class _ScanPageState extends State<ScanPage> {
 
   void _showAdded(Map<String, Object?> card, int qty) => _showFlash(
     displayName(card),
-    Colors.green,
+    VaultColors.success,
     Icons.check_circle,
     subtitle: '${printLabel(card)} · jetzt $qty× gescannt',
     image: card['image'] as String?,
@@ -443,10 +495,20 @@ class _ScanPageState extends State<ScanPage> {
     final last = _last;
     final lastCard = last?.card;
     final flash = _flash;
-    final frameColor = flash?.color ?? (_candidate != null ? Colors.amber : Colors.white70);
+    final frameColor =
+        flash?.color ??
+        (_candidate != null ? VaultColors.brass : VaultColors.parchment);
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: Text('Scannen · $_added hinzugefügt')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const VaultLogo(compact: true, height: 34),
+            const SizedBox(width: 10),
+            Flexible(child: Text('Scannen · $_added hinzugefügt')),
+          ],
+        ),
+      ),
       body: _error != null
           ? Center(child: Text('Kamera-Fehler: $_error'))
           : cam == null
@@ -461,7 +523,10 @@ class _ScanPageState extends State<ScanPage> {
                       aspectRatio: 63 / 88, // Magic card
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          border: Border.all(color: frameColor, width: flash != null ? 6 : 2),
+                          border: Border.all(
+                            color: frameColor,
+                            width: flash != null ? 6 : 2,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -469,53 +534,119 @@ class _ScanPageState extends State<ScanPage> {
                   ),
                 ),
                 Positioned(
-                  top: 12,
-                  left: 12,
-                  right: 12,
-                  child: Text(
-                    _status,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, backgroundColor: Colors.black54),
-                  ),
-                ),
-                Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 150),
-                    child: flash == null
-                        ? const SizedBox.shrink()
-                        : Card(
-                            key: ValueKey(flash),
-                            color: flash.color.withValues(alpha: 0.92),
-                            margin: const EdgeInsets.all(32),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (flash.image != null)
-                                    Image.network(largeImage(flash.image), height: 220)
-                                  else
-                                    Icon(flash.icon, size: 56, color: Colors.white),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    flash.title,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (flash.subtitle != null)
-                                    Text(
-                                      flash.subtitle!,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                ],
-                              ),
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Semantics(
+                      liveRegion: true,
+                      label: _status,
+                      child: ExcludeSemantics(
+                        child: Container(
+                          margin: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: VaultColors.surfaceElevated.withValues(
+                              alpha: 0.94,
+                            ),
+                            border: Border.all(color: VaultColors.outline),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            _status,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: VaultColors.parchmentBright,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: SafeArea(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(32),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 150),
+                          child: flash == null
+                              ? const SizedBox.shrink()
+                              : Semantics(
+                                  key: ValueKey(flash),
+                                  liveRegion: true,
+                                  container: true,
+                                  label: [
+                                    flash.title,
+                                    if (flash.subtitle != null) flash.subtitle!,
+                                  ].join(', '),
+                                  child: ExcludeSemantics(
+                                    child: Card(
+                                      color: VaultColors.surfaceElevated
+                                          .withValues(alpha: 0.96),
+                                      shape: RoundedRectangleBorder(
+                                        side: BorderSide(
+                                          color: flash.color,
+                                          width: 2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (flash.image != null)
+                                              ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      maxHeight: 220,
+                                                    ),
+                                                child: Image.network(
+                                                  largeImage(flash.image),
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              )
+                                            else
+                                              Icon(
+                                                flash.icon,
+                                                size: 56,
+                                                color: flash.color,
+                                              ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              flash.title,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                color:
+                                                    VaultColors.parchmentBright,
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            if (flash.subtitle != null)
+                                              Text(
+                                                flash.subtitle!,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  color: VaultColors.parchment,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 if (last != null && lastCard != null)
@@ -523,44 +654,69 @@ class _ScanPageState extends State<ScanPage> {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    child: Material(
-                      color: Colors.black87,
-                      child: ListTile(
-                        leading: lastCard['image'] == null
-                            ? null
-                            : Image.network('${lastCard['image']}', width: 40),
-                        title: Text(displayName(lastCard)),
-                        subtitle: Text(printLabel(lastCard)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Rückgängig',
-                              icon: const Icon(Icons.undo),
-                              onPressed: () async {
-                                await Db.removeCopy(last.printId, lastCard['id'] as String);
-                                setState(() {
-                                  _last = null;
-                                  _added--;
-                                  _countedCardId = null; // scanning it again is fine now
-                                });
-                                _showFlash('Entfernt', Colors.grey, Icons.undo);
-                              },
+                    child: SafeArea(
+                      top: false,
+                      child: Semantics(
+                        liveRegion: true,
+                        container: true,
+                        label:
+                            'Zuletzt gescannt: ${displayName(lastCard)}, ${printLabel(lastCard)}',
+                        child: Material(
+                          color: VaultColors.surfaceElevated.withValues(
+                            alpha: 0.96,
+                          ),
+                          child: ListTile(
+                            leading: lastCard['image'] == null
+                                ? null
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      '${lastCard['image']}',
+                                      width: 40,
+                                    ),
+                                  ),
+                            title: Text(displayName(lastCard)),
+                            subtitle: Text(printLabel(lastCard)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Rückgängig',
+                                  icon: const Icon(Icons.undo),
+                                  onPressed: () async {
+                                    await Db.removeCopy(
+                                      last.printId,
+                                      lastCard['id'] as String,
+                                    );
+                                    setState(() {
+                                      _last = null;
+                                      _added--;
+                                      _countedCardId =
+                                          null; // scanning it again is fine now
+                                    });
+                                    _showFlash(
+                                      'Entfernt',
+                                      VaultColors.brassMuted,
+                                      Icons.undo,
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  tooltip: 'Noch eine',
+                                  icon: const Icon(Icons.add),
+                                  onPressed: () async {
+                                    final qty = await Db.addCopy(
+                                      last.printId,
+                                      lastCard['id'] as String,
+                                      last.lang,
+                                    );
+                                    setState(() => _added++);
+                                    _showAdded(lastCard, qty);
+                                  },
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              tooltip: 'Noch eine',
-                              icon: const Icon(Icons.add),
-                              onPressed: () async {
-                                final qty = await Db.addCopy(
-                                  last.printId,
-                                  lastCard['id'] as String,
-                                  last.lang,
-                                );
-                                setState(() => _added++);
-                                _showAdded(lastCard, qty);
-                              },
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
