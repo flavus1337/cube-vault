@@ -38,9 +38,10 @@ const _langs = {
 
 /// Fetches the print in its printed language. Scryfall does not have every
 /// language for every set, so this falls back to the English print.
-Future<Map<String, dynamic>?> fetchBySetNumber(String set, String number, String lang) async {
+Future<Map<String, dynamic>?> fetchBySetNumber(String set, String number, String? lang) async {
   final path = '/cards/${set.toLowerCase()}/$number';
-  final code = _langs[lang] ?? 'en';
+  // Unknown language: German first, the cube is played in German.
+  final code = _langs[lang ?? 'DE'] ?? 'en';
   final card = code == 'en' ? null : await _get('$path/$code');
   return card ?? _get(path);
 }
@@ -53,6 +54,15 @@ Future<Map<String, dynamic>?> fetchSet(String code) => _get('/sets/$code');
 
 // Scryfall allows only about 2 searches per second, and answers 429 above that.
 const _searchPause = Duration(milliseconds: 500);
+
+/// German prints in [sets] whose name matches [name]. Used for retro frame
+/// cards, where only the collector number is printed and OCR may misread it.
+Future<List<Map<String, dynamic>>> searchInSets(String name, Iterable<String> sets) async {
+  if (sets.isEmpty) return const [];
+  final where = sets.map((s) => 'e:${s.toLowerCase()}').join(' or ');
+  final found = await _get('/cards/search', {'q': '($where) lang:de $name'});
+  return [...((found?['data'] as List?) ?? const [])].cast();
+}
 
 /// All pages of a Scryfall search, one print per row.
 Future<List<Map<String, dynamic>>> _searchPrints(String q, {String order = 'set'}) async {

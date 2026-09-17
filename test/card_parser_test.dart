@@ -48,6 +48,20 @@ void main() {
     expect(parseCard(lines)?.key, 'TOM/339/DE');
   });
 
+  test('retro frame without set code: number plus name', () {
+    // Ravnica Remastered retro frame: only "399" at the bottom right.
+    final hit = parseCard([
+      line('Kloster in der Flasche', 30, 20),
+      line('Artefakt', 30, 500),
+      line('Illus. Luca Zontini', 30, 840),
+      line('™ & © 2024 Wizards of the Coast', 30, 860),
+      line('399', 340, 860),
+    ]);
+    expect(hit?.set, isNull);
+    expect(hit?.number, '399');
+    expect(hit?.name, 'Kloster in der Flasche');
+  });
+
   test('nothing readable', () {
     expect(parseCard([line('3/3', 30, 20)]), isNull);
   });

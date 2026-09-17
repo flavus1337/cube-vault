@@ -160,12 +160,14 @@ class _ScanPageState extends State<ScanPage> {
       if (mounted) {
         setState(() {
           _candidate = hit.key;
-          _status = '${hit.set} #${hit.number} · suche Karte …';
+          _status = hit.set == null
+              ? '#${hit.number} · suche in den Cube-Sets …'
+              : '${hit.set} #${hit.number} · suche Karte …';
         });
       }
     }
     // Without a readable name the number needs a second, identical read.
-    if (count < 2 && hit.name == null) {
+    if (count < 2 && (hit.name == null || hit.set == null)) {
       if (mounted) setState(() => _status = 'Karte noch kurz still halten');
       return;
     }
@@ -250,7 +252,9 @@ class _ScanPageState extends State<ScanPage> {
   /// Scryfall knows the print; the cube knows which card it counts for. A card
   /// scanned for the first time is created here, a new set only after asking.
   Future<_Found?> _lookup(CardHit hit) async {
-    final json = await fetchBySetNumber(hit.set, hit.number, hit.lang);
+    final json = hit.set != null
+        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang)
+        : await _findInCubeSets(hit);
     if (json == null) return null;
     final printId = json['id'] as String;
     final lang = json['lang'] as String;
@@ -302,6 +306,25 @@ class _ScanPageState extends State<ScanPage> {
         ? 'Karte ist ausgeschlossen'
         : null;
     return (printId: printId, lang: lang, card: card, problem: problem);
+  }
+
+  /// Retro frame cards print no set code. The number is tried in every set of
+  /// the cube and only the card whose name matches the read name is taken.
+  Future<Map<String, dynamic>?> _findInCubeSets(CardHit hit) async {
+    final name = hit.name;
+    if (name == null) return null;
+    bool matches(Map<String, dynamic> json) =>
+        _nameMatches(name, {'name': json['name'], 'name_de': json['printed_name']});
+
+    for (final set in _knownSets) {
+      final json = await fetchBySetNumber(set, hit.number, hit.lang);
+      if (json != null && matches(json)) return json;
+    }
+    // The tiny number is easy to misread, so the name alone can find the card.
+    for (final json in await searchInSets(name, _knownSets)) {
+      if (matches(json)) return json;
+    }
+    return null;
   }
 
   // Scanning pauses while the dialog is open: frames are skipped while busy.

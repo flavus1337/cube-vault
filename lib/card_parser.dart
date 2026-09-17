@@ -6,17 +6,20 @@ class OcrLine {
   const OcrLine(this.text, this.box);
 }
 
-/// The exact print read from one camera frame. All cube cards are from 2024
-/// or newer, so every card has set code and collector number printed.
+/// What one camera frame gave us. Cards in the modern frame print set code,
+/// collector number and language at the bottom left. Cards in the retro frame
+/// (e.g. Ravnica Remastered #399+) print only the number, so [set] and [lang]
+/// stay null and the number is tried in the cube's sets.
 class CardHit {
-  final String set, number, lang;
+  final String? set, lang;
+  final String number;
 
   /// The top line of the card, used to check the looked-up card. OCR of the
   /// name is unreliable, so it only confirms, it never picks the card.
   final String? name;
   const CardHit(this.set, this.number, this.lang, this.name);
 
-  String get key => '$set/$number/$lang';
+  String get key => '${set ?? '?'}/$number/${lang ?? '?'}';
 }
 
 /// Letters only, lower case, umlauts folded: "Fäulnisfluch-Rakshasa" becomes
@@ -84,6 +87,15 @@ CardHit? parseCard(List<OcrLine> lines, {Set<String> knownSets = const {}}) {
     }
   }
 
+  // Retro frame: no set code line, so the number alone has to do. It sits in
+  // the bottom half, and the name has to confirm the card later.
+  if (name != null) {
+    final bottom = lines.map((l) => l.box.bottom).reduce((a, b) => a > b ? a : b);
+    for (final line in lines.where((l) => l.box.top > bottom * 0.6)) {
+      final n = _numberLine.firstMatch(line.text);
+      if (n != null) return CardHit(null, n[1]!, null, name);
+    }
+  }
   return null;
 }
 
