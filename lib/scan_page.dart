@@ -173,9 +173,15 @@ class _ScanPageState extends State<ScanPage> {
         });
       }
     }
-    // Without a readable name the number needs a second, identical read.
-    if (count < 2 && (hit.name == null || hit.set == null)) {
-      if (mounted) setState(() => _status = 'Karte noch kurz still halten');
+    // A number without a set code fits every set, so the name always has to
+    // confirm the card. With a set code, two identical reads are enough.
+    final needsName = hit.set == null;
+    if (hit.name == null && (needsName || count < 2)) {
+      if (mounted) {
+        setState(
+          () => _status = needsName ? 'Kartenname nicht lesbar' : 'Karte noch kurz still halten',
+        );
+      }
       return;
     }
 
@@ -220,7 +226,7 @@ class _ScanPageState extends State<ScanPage> {
     // One read is enough when the name on the card matches the card we found.
     // Only a misread number could put the wrong card in, and a wrong number
     // almost never belongs to a card with the same name.
-    if (count < 2 && !_nameMatches(hit.name!, card)) {
+    if ((needsName || count < 2) && !_nameMatches(hit.name!, card)) {
       debugPrint(
         'name "${hit.name}" != "${card['name_de'] ?? card['name']}", waiting for a second read',
       );
