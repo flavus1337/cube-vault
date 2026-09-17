@@ -1,0 +1,6 @@
+# Copy to android/key.properties and fill in to sign release builds.
+# Without this file the release build is signed with the debug key.
+storeFile=/absolute/path/to/upload-keystore.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
