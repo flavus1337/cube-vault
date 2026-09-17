@@ -34,20 +34,37 @@ export default function CubePage({ role }: { role: Role }) {
   const [selected, setSelected] = useState<Card | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      fetchAll<Card>('cards', 'id'),
-      fetchAll<CubeSet>('sets', 'code'),
-      fetchAll<Copy>('copies', 'print_id'),
-    ])
-      .then(([cards, sets, copyRows]) => {
+    let stop = false
+    async function load() {
+      try {
+        const [cards, sets, copyRows] = await Promise.all([
+          fetchAll<Card>('cards', 'id'),
+          fetchAll<CubeSet>('sets', 'code'),
+          fetchAll<Copy>('copies', 'print_id'),
+        ])
+        if (stop) return
         const counts = new Map<string, number>()
         for (const c of copyRows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
         setCards(cards)
         setSets(sets)
         setCopies(counts)
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+        setError(null)
+      } catch (e) {
+        if (!stop) setError((e as Error).message)
+      } finally {
+        if (!stop) setLoading(false)
+      }
+    }
+    load()
+    // Quietly pick up other people's scans. Filters, scrolling and the open
+    // card stay as they are; a hidden tab skips the request.
+    const timer = setInterval(() => {
+      if (!document.hidden) load()
+    }, 15000)
+    return () => {
+      stop = true
+      clearInterval(timer)
+    }
   }, [])
 
   const cubeSets = sets.filter((s) => s.in_cube)

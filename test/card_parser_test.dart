@@ -36,6 +36,18 @@ void main() {
     expect(parseCard([line('Lightning Bolt {R}', 30, 20)]), isNull);
   });
 
+  test('OCR noise in the set code and the number', () {
+    // Real reads of a borderless Tarkir card: "MO339" and "TOM DE".
+    final lines = [
+      line('Fäulnisfluch-Rakshasa', 30, 20),
+      line('MO339', 30, 850),
+      line('TOM DE > TOMAS DUCHEK', 30, 872),
+    ];
+    expect(parseCard(lines, knownSets: {'TDM', 'FDN'})?.key, 'TDM/339/DE');
+    // Without the cube's set codes the read code stays as it is.
+    expect(parseCard(lines)?.key, 'TOM/339/DE');
+  });
+
   test('nothing readable', () {
     expect(parseCard([line('3/3', 30, 20)]), isNull);
   });

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'db.dart';
 import 'login_page.dart';
 import 'scan_page.dart';
+import 'update_check.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +69,34 @@ class _CollectionPageState extends State<CollectionPage> {
   void initState() {
     super.initState();
     _load();
+    _checkForUpdate();
+  }
+
+  /// Asks GitHub once per start whether a newer release is out.
+  Future<void> _checkForUpdate() async {
+    try {
+      final current = (await PackageInfo.fromPlatform()).version;
+      final tag = await newerRelease(current);
+      if (tag == null || !mounted) return;
+      final install = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Update verfügbar'),
+          content: Text('Version $tag ist da, du hast $current.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Später')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Herunterladen'),
+            ),
+          ],
+        ),
+      );
+      // The browser downloads the APK, Android installs it over this version.
+      if (install == true) await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('update check: $e'); // no network, GitHub down: not important
+    }
   }
 
   Future<void> _load() async {

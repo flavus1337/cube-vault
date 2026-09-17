@@ -28,14 +28,17 @@ class _ScanPageState extends State<ScanPage> {
   bool _busy = false;
 
   String? _candidate;
+  String _status = 'Karte in den Rahmen halten';
   // How often each hit was read while cards are in view. Counting instead of
   // requiring consecutive frames: OCR often misses the set line in single frames.
   final _seen = <String, int>{};
   DateTime _lastHitAt = DateTime(0);
+  DateTime _lastLogAt = DateTime(0);
   // Lookup results per hit key. null = Scryfall does not know it, so we don't ask again.
   final _cache = <String, _Found?>{};
   // Set codes the user said no to in this scan session.
   final _declinedSets = <String>{};
+  Set<String> _knownSets = const {};
 
   _Found? _last;
   DateTime _lastSeen = DateTime(0);
@@ -69,6 +72,7 @@ class _ScanPageState extends State<ScanPage> {
   void initState() {
     super.initState();
     _start();
+    Db.setCodes().then((codes) => _knownSets = codes).catchError((_) => const <String>{});
   }
 
   Future<void> _start() async {
@@ -115,7 +119,13 @@ class _ScanPageState extends State<ScanPage> {
           for (final l in b.lines) OcrLine(l.text, l.boundingBox),
       ];
       _ocrMs = ocrWatch.elapsedMilliseconds;
-      await _handle(parseCard(lines));
+      final hit = parseCard(lines, knownSets: _knownSets);
+      // Diagnosis: when nothing is readable, log what the camera saw.
+      if (hit == null && DateTime.now().difference(_lastLogAt) > const Duration(seconds: 2)) {
+        _lastLogAt = DateTime.now();
+        debugPrint('read nothing (${_ocrMs}ms): ${lines.map((l) => l.text).join(' | ')}');
+      }
+      await _handle(hit);
     } catch (e) {
       debugPrint('scan: $e');
     } finally {
@@ -125,7 +135,12 @@ class _ScanPageState extends State<ScanPage> {
 
   Future<void> _handle(CardHit? hit) async {
     if (hit == null) {
-      if (_candidate != null && mounted) setState(() => _candidate = null);
+      if (_candidate != null && mounted) {
+        setState(() {
+          _candidate = null;
+          _status = 'Karte in den Rahmen halten';
+        });
+      }
       return;
     }
     final now = DateTime.now();
@@ -140,19 +155,35 @@ class _ScanPageState extends State<ScanPage> {
       _lastSeen = now;
       return;
     }
-    if (_candidate != hit.key && mounted) setState(() => _candidate = hit.key);
-    if (count < 2) return; // one read can be wrong, two identical reads are not
+    if (_candidate != hit.key) {
+      debugPrint('read ${hit.key}');
+      if (mounted) {
+        setState(() {
+          _candidate = hit.key;
+          _status = '${hit.set} #${hit.number} · suche Karte …';
+        });
+      }
+    }
+    // Without a readable name the number needs a second, identical read.
+    if (count < 2 && hit.name == null) {
+      if (mounted) setState(() => _status = 'Karte noch kurz still halten');
+      return;
+    }
 
     final watch = Stopwatch()..start();
     if (!_cache.containsKey(hit.key)) {
       try {
         _cache[hit.key] = await _lookup(hit);
       } catch (e) {
+        debugPrint('lookup ${hit.key} failed: $e');
         if (mounted) _showFlash('Keine Verbindung', Colors.orange, Icons.wifi_off);
         return;
       }
       final found = _cache[hit.key];
       if (!mounted) return;
+      debugPrint(
+        'lookup ${hit.key}: ${found == null ? 'unknown to Scryfall' : found.problem ?? 'ok'}',
+      );
       if (found == null) {
         _showFlash('Nicht gefunden', Colors.red, Icons.close, subtitle: hit.key);
       } else if (found.problem != null) {
@@ -170,10 +201,22 @@ class _ScanPageState extends State<ScanPage> {
     if (found == null || card == null || found.problem != null) return;
     final lookupMs = watch.elapsedMilliseconds;
 
+    // One read is enough when the name on the card matches the card we found.
+    // Only a misread number could put the wrong card in, and a wrong number
+    // almost never belongs to a card with the same name.
+    if (count < 2 && !_nameMatches(hit.name!, card)) {
+      debugPrint(
+        'name "${hit.name}" != "${card['name_de'] ?? card['name']}", waiting for a second read',
+      );
+      if (mounted) setState(() => _status = 'Karte noch kurz still halten');
+      return;
+    }
+
     final int qty;
     try {
       qty = await Db.addCopy(found.printId, card['id'] as String, found.lang);
     } catch (e) {
+      debugPrint('save ${hit.key} failed: $e');
       if (mounted) _showFlash('Speichern fehlgeschlagen', Colors.orange, Icons.cloud_off);
       return;
     }
@@ -182,12 +225,26 @@ class _ScanPageState extends State<ScanPage> {
     );
     HapticFeedback.heavyImpact();
     _lastSeen = DateTime.now();
+    _status = 'Karte in den Rahmen halten';
     if (!mounted) return;
     setState(() {
       _last = found;
       _added++;
     });
     _showAdded(card, qty);
+  }
+
+  bool _nameMatches(String read, Map<String, Object?> card) {
+    final a = plainName(read);
+    if (a.length < 4) return false;
+    for (final name in [card['name_de'], card['name']]) {
+      final b = plainName('${name ?? ''}');
+      if (b.isEmpty) continue;
+      if (b.contains(a) || a.contains(b)) return true;
+      final prefix = [a.length, b.length, 6].reduce((x, y) => x < y ? x : y);
+      if (a.substring(0, prefix) == b.substring(0, prefix)) return true;
+    }
+    return false;
   }
 
   /// Scryfall knows the print; the cube knows which card it counts for. A card
@@ -320,7 +377,7 @@ class _ScanPageState extends State<ScanPage> {
                   left: 12,
                   right: 12,
                   child: Text(
-                    'Erkannt: ${_candidate ?? '…'}',
+                    _status,
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, backgroundColor: Colors.black54),
                   ),

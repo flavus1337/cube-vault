@@ -55,6 +55,11 @@ class Db {
       .eq('oracle_id', oracleId)
       .maybeSingle();
 
+  /// Set codes in the cube, upper case, to fix OCR mistakes while scanning.
+  static Future<Set<String>> setCodes() async => {
+    for (final r in await _sb.from('sets').select('code')) '${r['code']}'.toUpperCase(),
+  };
+
   static Future<Map<String, Object?>?> findSet(String code) =>
       _sb.from('sets').select().eq('code', code).maybeSingle();
 
