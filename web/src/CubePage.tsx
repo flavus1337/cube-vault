@@ -20,6 +20,19 @@ const TYPES: [string, RegExp][] = [
   ['Kampf', /Kampf|Battle/i],
 ]
 
+const countCopies = (rows: Copy[]) => {
+  const counts = new Map<string, number>()
+  for (const c of rows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
+  return counts
+}
+
+const groupPrints = (rows: Copy[]) => {
+  const byCard = new Map<string, Copy[]>()
+  for (const c of rows) byCard.set(c.card_id, [...(byCard.get(c.card_id) ?? []), c])
+  for (const list of byCard.values()) list.sort((a, b) => b.qty - a.qty)
+  return byCard
+}
+
 const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
 // Sharpest Scryfall image (745×1040 PNG), only for the detail view.
@@ -31,6 +44,8 @@ export default function CubePage({ role }: { role: Role }) {
   const [cards, setCards] = useState<Card[]>([])
   const [sets, setSets] = useState<CubeSet[]>([])
   const [copies, setCopies] = useState<Map<string, number>>(new Map())
+  // Prints scanned per card, most copies first: + and - act on the first one.
+  const [prints, setPrints] = useState<Map<string, Copy[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -55,11 +70,10 @@ export default function CubePage({ role }: { role: Role }) {
           fetchAll<Copy>('copies', 'print_id'),
         ])
         if (stop) return
-        const counts = new Map<string, number>()
-        for (const c of copyRows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
         setCards(cards)
         setSets(sets)
-        setCopies(counts)
+        setCopies(countCopies(copyRows))
+        setPrints(groupPrints(copyRows))
         setError(null)
       } catch (e) {
         if (!stop) setError((e as Error).message)
@@ -107,6 +121,21 @@ export default function CubePage({ role }: { role: Role }) {
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
+
+  // Editors change the number of scanned copies right here.
+  async function changeCopies(card: Card, delta: number) {
+    const known = prints.get(card.id) ?? []
+    const printId = known[0]?.print_id ?? card.id
+    const { error } = await supabase.rpc(delta > 0 ? 'add_copy' : 'remove_copy', {
+      p_print_id: printId,
+      p_card_id: card.id,
+      ...(delta > 0 ? { p_lang: known[0]?.lang ?? 'en' } : {}),
+    })
+    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    const copyRows = await fetchAll<Copy>('copies', 'print_id')
+    setCopies(countCopies(copyRows))
+    setPrints(groupPrints(copyRows))
+  }
 
   async function toggleExcluded(card: Card) {
     let reason: string | null = null
@@ -233,6 +262,7 @@ export default function CubePage({ role }: { role: Role }) {
           card={selected}
           copies={copies.get(selected.id) ?? 0}
           editable={canEdit(role)}
+          onChangeCopies={(delta) => changeCopies(selected, delta)}
           onToggleExcluded={() => toggleExcluded(selected)}
           onClose={() => setSelected(null)}
         />
@@ -245,10 +275,18 @@ function CardDialog(props: {
   card: Card
   copies: number
   editable: boolean
+  onChangeCopies: (delta: number) => Promise<void>
   onToggleExcluded: () => void
   onClose: () => void
 }) {
-  const { card, copies, editable, onToggleExcluded, onClose } = props
+  const { card, copies, editable, onChangeCopies, onToggleExcluded, onClose } = props
+  const [busy, setBusy] = useState(false)
+
+  async function change(delta: number) {
+    setBusy(true)
+    await onChangeCopies(delta)
+    setBusy(false)
+  }
   const ref = useRef<HTMLDialogElement>(null)
   const [hiRes, setHiRes] = useState<string | null>(null)
 
@@ -279,6 +317,17 @@ function CardDialog(props: {
         {card.set_code.toUpperCase()} #{card.number} · {RARITY[card.rarity] ?? card.rarity} · {euro(card.price_eur)} ·{' '}
         {copies}× gescannt
       </p>
+      {editable && (
+        <div className="copies">
+          <button id="fewer" disabled={busy || copies === 0} onClick={() => change(-1)} aria-label="Eine Kopie weniger">
+            −
+          </button>
+          <strong>{copies}</strong>
+          <button id="more" disabled={busy} onClick={() => change(1)} aria-label="Eine Kopie mehr">
+            +
+          </button>
+        </div>
+      )}
       {card.excluded && (
         <p className="warn">Ausgeschlossen{card.exclude_reason ? `: ${card.exclude_reason}` : ''}</p>
       )}

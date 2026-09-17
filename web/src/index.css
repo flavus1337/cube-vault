@@ -98,3 +98,7 @@ tr.waiting td { background: #e8a24a14; }
 
 .topbar .apk { color: var(--muted); text-decoration: none; font-size: 14px; }
 .topbar .apk:hover { color: var(--text); }
+
+.copies { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 4px 0; }
+.copies button { width: 44px; height: 40px; font-size: 20px; line-height: 1; }
+.copies strong { min-width: 2ch; text-align: center; font-size: 18px; }
