@@ -94,6 +94,23 @@ export default function CubePage({ role }: { role: Role }) {
     }
   }, [])
 
+  const filtered =
+    Boolean(text || colors.size || rarity || cardType || cmc || setCode || showExcluded) ||
+    show !== 'owned' ||
+    sort !== 'name'
+
+  function resetFilters() {
+    setText('')
+    setColors(new Set())
+    setRarity('')
+    setCardType('')
+    setCmc('')
+    setSetCode('')
+    setShowExcluded(false)
+    setShow('owned')
+    setSort('name')
+  }
+
   const cubeSets = sets.filter((s) => s.in_cube)
   const list = useMemo(() => {
     const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
@@ -231,6 +248,11 @@ export default function CubePage({ role }: { role: Role }) {
           />
           Ausgeschlossene zeigen
         </label>
+        {filtered && (
+          <button id="reset" onClick={resetFilters}>
+            Filter zurücksetzen
+          </button>
+        )}
         <select id="show" aria-label="Anzeigen" value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
           <option value="owned">Vorhandene Karten</option>
           <option value="missing">Fehlende Karten</option>
