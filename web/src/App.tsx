@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import CubePage from './CubePage'
+import MyCardsPage from './MyCardsPage'
 import { HistoryPage, PlayersPage, SetsPage } from './pages'
 import { supabase, type Profile } from './supabase'
 
@@ -100,6 +101,7 @@ export default function App() {
   const APK_URL = 'https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk'
   const nav = [
     ['/cube', 'Cube'],
+    ['/mine', 'Meine Karten'],
     ['/history', 'Verlauf'],
     ['/sets', 'Sets'],
     ...(profile.role === 'admin' ? [['/players', 'Spieler']] : []),
@@ -127,7 +129,9 @@ export default function App() {
           <button onClick={logout}>Abmelden</button>
         </div>
       </header>
-      {route === '/history' ? (
+      {route === '/mine' ? (
+        <MyCardsPage />
+      ) : route === '/history' ? (
         <HistoryPage />
       ) : route === '/sets' ? (
         <SetsPage role={profile.role} />

@@ -80,6 +80,14 @@ Future<Map<String, dynamic>?> fetchBySetNumber(
 String? oracleIdOf(Map<String, dynamic> card) =>
     card['oracle_id'] ?? (card['card_faces'] as List?)?.first['oracle_id'];
 
+/// Finds a card by the name printed on it, German first. Only used for a
+/// player's own cards, where the set code was not readable.
+Future<Map<String, dynamic>?> fetchByPrintedName(String name) async {
+  final german = await _get('/cards/search', {'q': '"$name" lang:de'});
+  final card = (german?['data'] as List?)?.first as Map<String, dynamic>?;
+  return card ?? await _get('/cards/named', {'fuzzy': name});
+}
+
 Future<Map<String, dynamic>?> fetchSet(String code) => _get('/sets/$code');
 
 // Scryfall allows only about 2 searches per second, and answers 429 above that.
@@ -246,4 +254,27 @@ String? _image(Map<String, dynamic>? card) {
   final uris =
       card['image_uris'] ?? (card['card_faces'] as List?)?.first['image_uris'];
   return (uris as Map?)?['normal'] as String?;
+}
+
+/// A row for `private_cards`: what one scanned print is, without the cube.
+Map<String, Object?> privateRow(Map<String, dynamic> json) {
+  final face = (json['card_faces'] as List?)?.first as Map<String, dynamic>?;
+  return {
+    'print_id': json['id'],
+    'oracle_id': oracleIdOf(json),
+    'set_code': json['set'],
+    'set_name': json['set_name'],
+    'number': json['collector_number'],
+    'name': json['name'],
+    'name_de': _field(json, 'printed_name', ' // '),
+    'type_line': _field(json, 'type_line', ' // ') ?? '',
+    'type_de': _field(json, 'printed_type_line', ' // '),
+    'mana_cost': _field(json, 'mana_cost', ' // ') ?? '',
+    'cmc': (json['cmc'] as num?)?.toDouble() ?? 0,
+    'colors': ((json['colors'] ?? face?['colors'] ?? const []) as List).join(),
+    'rarity': json['rarity'],
+    'image': _image(json),
+    'price_eur': double.tryParse('${json['prices']?['eur']}'),
+    'lang': json['lang'],
+  };
 }

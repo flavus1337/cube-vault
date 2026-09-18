@@ -204,3 +204,6 @@ tr.waiting td { background: #e8a24a14; }
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
   padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
 }
+
+.tile.private .copies { position: absolute; inset: auto 0 0 0; justify-content: center; gap: 8px; padding: 6px; }
+.tile.private .copies button { width: 40px; height: 34px; font-size: 18px; }

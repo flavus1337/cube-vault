@@ -85,3 +85,24 @@ export async function fetchAll<T>(table: string, orderBy: string, columns = '*')
 }
 
 export const canEdit = (role: Role) => role === 'editor' || role === 'admin'
+
+export type PrivateCard = {
+  print_id: string
+  oracle_id: string
+  set_code: string
+  set_name: string | null
+  number: string
+  name: string
+  name_de: string | null
+  type_line: string
+  type_de: string | null
+  mana_cost: string
+  cmc: number
+  colors: string
+  rarity: string | null
+  image: string | null
+  price_eur: number | null
+  lang: string
+  qty: number
+  added_at: string
+}

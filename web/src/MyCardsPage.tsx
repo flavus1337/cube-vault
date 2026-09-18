@@ -1,0 +1,115 @@
+import { useEffect, useMemo, useState } from 'react'
+import { fetchAll, supabase, type PrivateCard } from './supabase'
+
+const name = (c: PrivateCard) => c.name_de || c.name
+const type = (c: PrivateCard) => c.type_de || c.type_line
+const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+
+/* Cards a player owns outside the cube. The database only ever returns the
+   rows of the player who is logged in. */
+export default function MyCardsPage() {
+  const [cards, setCards] = useState<PrivateCard[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [text, setText] = useState('')
+
+  async function load(quiet = false) {
+    try {
+      const rows = await fetchAll<PrivateCard>('private_cards', 'print_id')
+      setCards(rows)
+      setError(null)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      if (!quiet) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let stop = false
+    fetchAll<PrivateCard>('private_cards', 'print_id')
+      .then((rows) => {
+        if (stop) return
+        setCards(rows)
+        setError(null)
+      })
+      .catch((e) => {
+        if (!stop) setError((e as Error).message)
+      })
+      .finally(() => {
+        if (!stop) setLoading(false)
+      })
+    return () => {
+      stop = true
+    }
+  }, [])
+
+  async function change(card: PrivateCard, delta: number) {
+    const { error } = await supabase.rpc(delta > 0 ? 'add_private_copy' : 'remove_private_copy', {
+      ...(delta > 0 ? { card: { ...card, owner: undefined, qty: undefined, added_at: undefined } } : { p_print_id: card.print_id }),
+    })
+    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    load(true)
+  }
+
+  const list = useMemo(() => {
+    const search = text.trim().toLowerCase()
+    return cards
+      .filter((c) => [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search))
+      .sort((a, b) => name(a).localeCompare(name(b), 'de'))
+  }, [cards, text])
+
+  const copies = list.reduce((sum, c) => sum + c.qty, 0)
+  const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * c.qty, 0)
+
+  return (
+    <main className="page">
+      <h1 className="cube-title">Meine Karten</h1>
+      <p className="muted">Nur du siehst diese Karten. Sie gehören nicht zum Cube.</p>
+      <div className="toolbar">
+        <input
+          id="my-search"
+          type="search"
+          placeholder="Name, Typ oder Set"
+          aria-label="Suche"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </div>
+      <p className="muted summary">
+        {list.length} Karten · {copies} Kopien · {euro(value)}
+      </p>
+
+      {error ? (
+        <p className="status">Laden fehlgeschlagen: {error}</p>
+      ) : loading ? (
+        <p className="status">Lädt …</p>
+      ) : !list.length ? (
+        <p className="status">
+          Noch nichts hier. Stelle den Scanner in der App auf „Meine Karten“ und scanne los.
+        </p>
+      ) : (
+        <div className="grid">
+          {list.map((c) => (
+            <div key={c.print_id} className="tile private">
+              {c.image ? (
+                <img src={c.image} alt={name(c)} title={`${name(c)} — ${type(c)}`} loading="lazy" />
+              ) : (
+                <div className="noimg">{name(c)}</div>
+              )}
+              <span className="badge">{c.qty}×</span>
+              <div className="copies">
+                <button aria-label={`Eine Kopie von ${name(c)} weniger`} onClick={() => change(c, -1)}>
+                  −
+                </button>
+                <button aria-label={`Eine Kopie von ${name(c)} mehr`} onClick={() => change(c, 1)}>
+                  +
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  )
+}

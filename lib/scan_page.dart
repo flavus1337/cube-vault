@@ -49,6 +49,8 @@ class _ScanPageState extends State<ScanPage> {
   // Set codes the user said no to in this scan session.
   final _declinedSets = <String>{};
   Set<String> _knownSets = const {};
+  // Off: every scan goes into the cube. On: into the player's own cards.
+  bool _privateMode = false;
 
   _Found? _last;
   // The card just counted. It counts again only after the camera saw nothing
@@ -270,7 +272,9 @@ class _ScanPageState extends State<ScanPage> {
 
     final int qty;
     try {
-      qty = await Db.addCopy(found.printId, card['id'] as String, found.lang);
+      qty = _privateMode
+          ? await Db.addPrivateCopy(card)
+          : await Db.addCopy(found.printId, card['id'] as String, found.lang);
     } catch (e) {
       debugPrint('save ${hit.key} failed: $e');
       if (mounted) {
@@ -313,6 +317,7 @@ class _ScanPageState extends State<ScanPage> {
   /// Scryfall knows the print; the cube knows which card it counts for. A card
   /// scanned for the first time is created here, a new set only after asking.
   Future<_Found?> _lookup(CardHit hit) async {
+    if (_privateMode) return _lookupPrivate(hit);
     var confirmed = false;
     Map<String, dynamic>? json;
     if (hit.set != null) {
@@ -402,6 +407,26 @@ class _ScanPageState extends State<ScanPage> {
       card: card,
       problem: problem,
       confirmed: confirmed,
+    );
+  }
+
+  /// Own cards can come from any set, so only Scryfall is asked. Without a set
+  /// code on the card the name decides, across all sets.
+  Future<_Found?> _lookupPrivate(CardHit hit) async {
+    final json = hit.set != null
+        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang)
+        : hit.name == null
+        ? null
+        : await fetchByPrintedName(hit.name!);
+    if (json == null) return null;
+    final row = privateRow(json);
+    return (
+      printId: json['id'] as String,
+      lang: json['lang'] as String,
+      // The oracle id groups prints of the same card while scanning.
+      card: {...row, 'id': row['oracle_id']},
+      problem: null,
+      confirmed: false,
     );
   }
 
@@ -508,7 +533,9 @@ class _ScanPageState extends State<ScanPage> {
     displayName(card),
     VaultColors.success,
     Icons.check_circle,
-    subtitle: '${printLabel(card)} · jetzt $qty× gescannt',
+    subtitle: _privateMode
+        ? '${printLabel(card)} · jetzt $qty× in Meine Karten'
+        : '${printLabel(card)} · jetzt $qty× gescannt',
     image: card['image'] as String?,
   );
 
@@ -539,6 +566,35 @@ class _ScanPageState extends State<ScanPage> {
             const SizedBox(width: 10),
             Flexible(child: Text('Scannen · $_added hinzugefügt')),
           ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('Cube'),
+                  icon: Icon(Icons.inventory_2),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('Meine Karten'),
+                  icon: Icon(Icons.person),
+                ),
+              ],
+              selected: {_privateMode},
+              onSelectionChanged: (choice) => setState(() {
+                _privateMode = choice.first;
+                // The same card may be counted again in the other mode.
+                _cache.clear();
+                _countedCardId = null;
+                _last = null;
+                _added = 0;
+              }),
+            ),
+          ),
         ),
       ),
       body: _error != null
@@ -716,10 +772,14 @@ class _ScanPageState extends State<ScanPage> {
                                   tooltip: 'Rückgängig',
                                   icon: const Icon(Icons.undo),
                                   onPressed: () async {
-                                    await Db.removeCopy(
-                                      last.printId,
-                                      lastCard['id'] as String,
-                                    );
+                                    if (_privateMode) {
+                                      await Db.removePrivateCopy(last.printId);
+                                    } else {
+                                      await Db.removeCopy(
+                                        last.printId,
+                                        lastCard['id'] as String,
+                                      );
+                                    }
                                     setState(() {
                                       _last = null;
                                       _added--;
@@ -737,11 +797,13 @@ class _ScanPageState extends State<ScanPage> {
                                   tooltip: 'Noch eine',
                                   icon: const Icon(Icons.add),
                                   onPressed: () async {
-                                    final qty = await Db.addCopy(
-                                      last.printId,
-                                      lastCard['id'] as String,
-                                      last.lang,
-                                    );
+                                    final qty = _privateMode
+                                        ? await Db.addPrivateCopy(lastCard)
+                                        : await Db.addCopy(
+                                            last.printId,
+                                            lastCard['id'] as String,
+                                            last.lang,
+                                          );
                                     setState(() => _added++);
                                     _showAdded(lastCard, qty);
                                   },

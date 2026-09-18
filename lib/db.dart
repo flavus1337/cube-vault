@@ -116,6 +116,14 @@ class Db {
     return findCard('${row['set_code']}', '${row['oracle_id']}');
   }
 
+  /// Cards a player keeps outside the cube. Only the owner can read them.
+  static Future<int> addPrivateCopy(Map<String, Object?> card) async =>
+      await _sb.rpc('add_private_copy', params: {'card': card}) as int;
+
+  static Future<int> removePrivateCopy(String printId) async =>
+      await _sb.rpc('remove_private_copy', params: {'p_print_id': printId})
+          as int;
+
   /// Both return how many copies of the card exist afterwards.
   static Future<int> addCopy(
     String printId,
