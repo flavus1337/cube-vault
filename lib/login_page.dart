@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 
 import 'app_theme.dart';
 import 'db.dart';
-import 'main.dart';
+import 'history_page.dart';
 
 /// Shows login, the waiting screen or the cube, depending on session and role.
 class AuthGate extends StatefulWidget {
@@ -67,7 +67,7 @@ class _AuthGateState extends State<AuthGate> {
     if (_error != null || _role == null || _role == 'waiting') {
       return _WaitingPage(error: _error, onRetry: _loadRole);
     }
-    return CollectionPage(canEdit: _role == 'editor' || _role == 'admin');
+    return ScanHistoryPage(canEdit: _role == 'editor' || _role == 'admin');
   }
 }
 

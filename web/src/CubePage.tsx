@@ -416,7 +416,21 @@ export default function CubePage({ role }: { role: Role }) {
         >
           Filter · {appliedFilters.length}
         </button>
+        <button
+          onClick={async () => {
+            await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
+            setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
+          }}
+        >
+          {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
+        </button>
+        {canEdit(role) && (
+          <button onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}>
+            Preise aktualisieren
+          </button>
+        )}
       </div>
+      {notice && <p className="muted">{notice}</p>}
       {(appliedFilters.length > 0 || filtered) && (
         <div className="applied-filters" aria-label="Aktive Filter">
           {appliedFilters.map((filter) => (
@@ -437,22 +451,6 @@ export default function CubePage({ role }: { role: Role }) {
           onDiscard={closeFilters}
         />
       )}
-      <div className="toolbar">
-        <button
-          onClick={async () => {
-            await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
-            setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
-          }}
-        >
-          {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
-        </button>
-        {canEdit(role) && (
-          <button onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}>
-            Preise aktualisieren
-          </button>
-        )}
-        {notice && <span className="muted">{notice}</span>}
-      </div>
       <p className="muted summary">
         {ownedCount} Karten · {copyCount} Kopien · {euro(value)}
       </p>

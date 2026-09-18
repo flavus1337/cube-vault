@@ -116,6 +116,76 @@ class Db {
     return findCard('${row['set_code']}', '${row['oracle_id']}');
   }
 
+  /// What this player scanned, newest first: cube scans come from the shared
+  /// history, own cards from the private list. One entry per card.
+  static Future<List<Map<String, Object?>>> myScans({int limit = 60}) async {
+    final me = _sb.auth.currentUser!.id;
+    final events = await _sb
+        .from('card_events')
+        .select('id, at, action, delta, card_id')
+        .eq('user_id', me)
+        .inFilter('action', ['copy_added', 'copy_removed'])
+        .order('at', ascending: false)
+        .limit(limit);
+
+    final ids = {
+      for (final e in events) e['card_id'] as String?,
+    }.nonNulls.toList();
+    final cards = ids.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await _sb
+              .from('cards')
+              .select(
+                'id, name, name_de, image, set_code, number, type_line, type_de',
+              )
+              .inFilter('id', ids);
+    final byId = {for (final c in cards) c['id'] as String: c};
+
+    final private = await _sb
+        .from('private_cards')
+        .select()
+        .order('added_at', ascending: false)
+        .limit(limit);
+
+    final scans = <Map<String, Object?>>[
+      for (final e in events)
+        if (byId[e['card_id']] != null)
+          {
+            ...byId[e['card_id']]!,
+            'kind': 'cube',
+            'at': e['at'],
+            'delta': e['delta'],
+            'card_id': e['card_id'],
+          },
+      for (final card in private)
+        {
+          ...card,
+          'kind': 'private',
+          'at': card['added_at'],
+          'delta': card['qty'],
+        },
+    ];
+    scans.sort((a, b) => '${b['at']}'.compareTo('${a['at']}'));
+    return scans.take(limit).toList();
+  }
+
+  /// Takes one copy back. For a cube card the print with the most copies is used.
+  static Future<void> undoScan(Map<String, Object?> scan) async {
+    if (scan['kind'] == 'private') {
+      await removePrivateCopy('${scan['print_id']}');
+      return;
+    }
+    final cardId = '${scan['card_id'] ?? scan['id']}';
+    final prints = await _sb
+        .from('copies')
+        .select('print_id')
+        .eq('card_id', cardId)
+        .order('qty', ascending: false)
+        .limit(1);
+    if (prints.isEmpty) return;
+    await removeCopy('${prints.first['print_id']}', cardId);
+  }
+
   /// Cards a player keeps outside the cube. Only the owner can read them.
   static Future<int> addPrivateCopy(Map<String, Object?> card) async =>
       await _sb.rpc('add_private_copy', params: {'card': card}) as int;
