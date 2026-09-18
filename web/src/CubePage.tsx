@@ -27,36 +27,31 @@ const TYPES: [string, RegExp][] = [
   ['Planeswalker', /Planeswalker/i],
 ]
 
-// German names for the keywords we are sure about; the rest stay as Scryfall
-// writes them, so a new keyword still shows up in the filter.
+// German keyword labels, taken from the German card texts on Scryfall
+// (tools/keywords_de.py). Keywords without a clean label stay English.
 const KEYWORDS: Record<string, string> = {
-  Flying: 'Fliegend',
-  Trample: 'Verursacht Trampelschaden',
+  Crew: 'Bemannen',
   Deathtouch: 'Todesberührung',
-  Lifelink: 'Lebensverknüpfung',
-  Haste: 'Eile',
-  Vigilance: 'Wachsamkeit',
-  'First strike': 'Erstschlag',
-  'Double strike': 'Doppelschlag',
-  Menace: 'Bedrohlich',
-  Reach: 'Reichweite',
   Defender: 'Verteidiger',
-  Indestructible: 'Unzerstörbar',
-  Hexproof: 'Fluchsicher',
-  Flash: 'Aufblitzen',
-  Prowess: 'Wagemut',
-  Scry: 'Hellsicht',
+  'Double strike': 'Doppelschlag',
   Equip: 'Ausrüsten',
-  Kicker: 'Aufpreis',
-  Enchant: 'Verzaubern',
-  Protection: 'Schutz',
-  Cycling: 'Umlauf',
-  Flashback: 'Rückblick',
-  Convoke: 'Zusammenkunft',
-  Escape: 'Flucht',
-  Crew: 'Besatzung',
-  Explore: 'Erkunden',
-  Landfall: 'Landfall',
+  Escape: 'Befreiung',
+  Evoke: 'Herbeirufen',
+  'First strike': 'Erstschlag',
+  Flash: 'Aufblitzen',
+  Flying: 'Fliegend',
+  Haste: 'Eile',
+  Hexproof: 'Fluchsicher',
+  Indestructible: 'Unzerstörbar',
+  Kicker: 'Bonus',
+  Lifelink: 'Lebensverknüpfung',
+  Menace: 'Bedrohlich',
+  Prowess: 'Bravour',
+  Reach: 'Reichweite',
+  Saddle: 'Aufsatteln',
+  Trample: 'Verursacht Trampelschaden',
+  Vigilance: 'Wachsamkeit',
+  Ward: 'Abwehr',
 }
 const keywordLabel = (key: string) => KEYWORDS[key] ?? key
 
