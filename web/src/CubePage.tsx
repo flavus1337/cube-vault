@@ -128,17 +128,6 @@ export default function CubePage({ role }: { role: Role }) {
     }
   }, [])
 
-  const colorsMatch = (c: Card) => {
-    if (!colors.size) return true
-    const have = c.colors.split('').filter(Boolean)
-    const wanted = [...colors].filter((col) => col !== 'C')
-    if (!exactColors) {
-      return [...colors].every((col) => (col === 'C' ? !have.length : have.includes(col)))
-    }
-    if (!wanted.length) return !have.length // only colourless picked
-    return have.length === wanted.length && wanted.every((col) => have.includes(col))
-  }
-
   // Keywords that actually appear on the cards in the database.
   const keywords = useMemo(
     () => [...new Set(cards.flatMap((c) => c.keywords))].sort((a, b) => keywordLabel(a).localeCompare(keywordLabel(b), 'de')),
@@ -167,6 +156,17 @@ export default function CubePage({ role }: { role: Role }) {
 
   const cubeSets = sets.filter((s) => s.in_cube)
   const list = useMemo(() => {
+    const colorsMatch = (c: Card) => {
+      if (!colors.size) return true
+      const have = c.colors.split('').filter(Boolean)
+      const wanted = [...colors].filter((col) => col !== 'C')
+      if (!exactColors) {
+        return [...colors].every((col) => (col === 'C' ? !have.length : have.includes(col)))
+      }
+      if (!wanted.length) return !have.length // only colourless picked
+      return have.length === wanted.length && wanted.every((col) => have.includes(col))
+    }
+
     const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
     const search = text.trim().toLowerCase()
     const result = cards.filter(
