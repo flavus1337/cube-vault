@@ -117,19 +117,21 @@ class _ScanHistoryPageState extends State<ScanHistoryPage> {
           ),
         ],
       ),
-      floatingActionButton: widget.canEdit
-          ? FloatingActionButton.extended(
-              icon: const Icon(Icons.document_scanner),
-              label: const Text('Scannen'),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ScanPage()),
-                );
-                _load();
-              },
-            )
-          : null,
+      // Everyone may scan: players collect into their own cards, editors also
+      // into the cube.
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.document_scanner),
+        label: const Text('Scannen'),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ScanPage(canEdit: widget.canEdit),
+            ),
+          );
+          _load();
+        },
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: scans == null && _error == null
@@ -216,7 +218,7 @@ class _ScanTile extends StatelessWidget {
             label: Text(private ? 'Privat' : 'Cube'),
             side: BorderSide(color: color),
           ),
-          if (canEdit && !removed)
+          if (!removed && (private || canEdit))
             IconButton(
               tooltip: 'Scan zurücknehmen',
               icon: const Icon(Icons.undo),

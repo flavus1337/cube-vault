@@ -25,7 +25,10 @@ typedef _Found = ({
 });
 
 class ScanPage extends StatefulWidget {
-  const ScanPage({super.key});
+  /// Only editors and admins may scan into the cube. Everyone else collects
+  /// into their own cards.
+  final bool canEdit;
+  const ScanPage({super.key, required this.canEdit});
 
   @override
   State<ScanPage> createState() => _ScanPageState();
@@ -50,7 +53,7 @@ class _ScanPageState extends State<ScanPage> {
   final _declinedSets = <String>{};
   Set<String> _knownSets = const {};
   // Off: every scan goes into the cube. On: into the player's own cards.
-  bool _privateMode = false;
+  late bool _privateMode = !widget.canEdit;
 
   _Found? _last;
   // The card just counted. It counts again only after the camera saw nothing
@@ -572,13 +575,14 @@ class _ScanPageState extends State<ScanPage> {
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: SegmentedButton<bool>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: false,
                   label: Text('Cube'),
                   icon: Icon(Icons.inventory_2),
+                  enabled: widget.canEdit,
                 ),
-                ButtonSegment(
+                const ButtonSegment(
                   value: true,
                   label: Text('Meine Karten'),
                   icon: Icon(Icons.person),

@@ -33,34 +33,60 @@ english = search(f'{WHERE} lang:en game:paper', unique='cards')
 keywords = sorted({k for c in english for k in c.get('keywords', [])})
 print(f'{len(keywords)} keywords in {len(english)} cards', file=sys.stderr)
 
-def label(en_text, de_text, keyword):
-    """German label for a keyword, taken from a line that is only that keyword.
+# Scryfall knows which keywords are abilities and which are actions inside a
+# sentence ("Mill four cards"). Only abilities carry a label at the line start.
+ABILITIES = set(get('https://api.scryfall.com/catalog/keyword-abilities')['data']) | set(
+    get('https://api.scryfall.com/catalog/ability-words')['data']
+)
 
-    Card lines look like "Flying", "Ward {2}", "Kicker—{1}{R}" or
-    "Flying, vigilance". Keyword actions inside a sentence ("Mill four cards")
-    give no clean label, so they are skipped.
+SENTENCE_STARTERS = {
+    'du', 'wenn', 'immer', 'diese', 'dieser', 'dieses', 'lege', 'schicke', 'ziehe', 'erzeuge',
+    'bestimme', 'wähle', 'als', 'zu', 'bis', 'falls', 'solange', 'am', 'zum', 'wirf', 'das',
+    'der', 'die', 'ein', 'eine', 'einen', 'es', 'sie', 'er', 'für', 'in', 'mit', 'nach', 'und',
+}
+
+def label(en_text, de_text, keyword):
+    """German label for a keyword, taken from the matching line of the card.
+
+    Lines look like "Flying", "Ward {2}", "Kicker—{1}{R}", "Affinity for
+    artifacts" or "Flying, vigilance". A keyword action inside a sentence gives
+    no clean label and is skipped.
     """
     en_lines, de_lines = en_text.split('\n'), de_text.split('\n')
     if len(en_lines) != len(de_lines):
         return None
     key = keyword.lower()
+    words = len(keyword.split())
     for en, de in zip(en_lines, de_lines):
         en, de = en.strip(), de.strip()
         de = de.split(' (')[0].strip()  # drop the reminder text
-        if re.fullmatch(re.escape(key) + r'(\s*(\{[^}]*\}|\d+|x))*\.?', en.lower()):
+        low = en.lower()
+        if re.fullmatch(re.escape(key) + r'(\s*(\{[^}]*\}|\d+|x))*\.?', low):
             return clean(re.split(r'\s\{|\s\d|\sX|—|:', de)[0])
-        if re.fullmatch(re.escape(key) + r'—.*', en.lower()):
+        if re.fullmatch(re.escape(key) + r'—.*', low):
             return clean(de.split('—')[0])
+        # "Affinity for artifacts", "Afterlife 1": the label starts the line too,
+        # but only for keyword abilities, not for actions used in a sentence.
+        if keyword in ABILITIES and low.startswith(key + ' '):
+            first = re.split(r'—|:|\{', de)[0]
+            return clean(' '.join(first.split()[:words]))
         parts_en = [x.strip().lower().rstrip('.') for x in en.split(',')]
         parts_de = [x.strip().rstrip('.') for x in de.split(',')]
         if len(parts_en) > 1 and len(parts_en) == len(parts_de) and key in parts_en:
             return clean(parts_de[parts_en.index(key)])
     return None
 
+# Labels that came out as the start of an instruction ("Gift a card" ->
+# "Verschenke eine Karte"), not as the name of the keyword.
+BAD = {'Champion', 'Gift', 'Fear'}
+TRAILING = {'des', 'der', 'die', 'das', 'für', 'vor', 'mit', 'von', 'im', 'zum', 'zur', 'und'}
+
 def clean(text):
     text = text.strip().rstrip('.').strip()
-    # A label is one or two words; anything longer is sentence text.
+    # A label is one to three words and never the start of a sentence.
     if not text or '(' in text or len(text) > 30 or len(text.split()) > 3:
+        return None
+    if text.split()[0].lower() in SENTENCE_STARTERS or text.split()[-1].lower() in TRAILING:
         return None
     return text
 
@@ -74,6 +100,8 @@ for keyword in keywords:
         got = label(en, de, keyword)
         if got: votes[got] = votes.get(got, 0) + 1
     best = max(votes, key=votes.get) if votes else None
+    if keyword in BAD:
+        best = None
     out[keyword] = best
     print(f'{keyword} -> {best}   {votes if len(votes) > 1 else ""}')
 json.dump(out, open('keywords_de.json', 'w'), ensure_ascii=False, indent=1)

@@ -31,26 +31,96 @@ const TYPES: [string, RegExp][] = [
 // German keyword labels, taken from the German card texts on Scryfall
 // (tools/keywords_de.py). Keywords without a clean label stay English.
 const KEYWORDS: Record<string, string> = {
+  Affinity: 'Affinität',
+  Afterlife: 'Seelenwandlung',
+  Alliance: 'Allianz',
+  Ascend: 'Aufstieg',
+  Battalion: 'Bataillon',
+  Bloodrush: 'Blutrausch',
+  Bloodthirst: 'Blutdurst',
+  Changeling: 'Wandelwicht',
+  Converge: 'Konvergenz',
+  Convoke: 'Einberufen',
   Crew: 'Bemannen',
+  Cycling: 'Umwandlung',
   Deathtouch: 'Todesberührung',
+  Decayed: 'Verwesung',
   Defender: 'Verteidiger',
   'Double strike': 'Doppelschlag',
+  Dredge: 'Ausgraben',
+  Eerie: 'Unheimlich',
+  Enchant: 'Verzaubert',
+  Enrage: 'Erzürnen',
   Equip: 'Ausrüsten',
   Escape: 'Befreiung',
   Evoke: 'Herbeirufen',
+  Evolve: 'Weiterentwicklung',
+  Exhaust: 'Überstrapazieren',
+  Extort: 'Abnötigen',
+  Ferocious: 'Wildheit',
   'First strike': 'Erstschlag',
   Flash: 'Aufblitzen',
+  Flashback: 'Rückblende',
+  Flurry: 'Zaubergestöber',
   Flying: 'Fliegend',
+  Forecast: 'Vorhersage',
+  Forestcycling: 'Waldumwandlung',
+  Forestwalk: 'Waldtarnung',
+  Graft: 'Pfropfen',
+  Harmonize: 'Harmonisieren',
   Haste: 'Eile',
+  Haunt: 'Spuk',
+  Hellbent: 'Versessenheit',
   Hexproof: 'Fluchsicher',
+  Hideaway: 'Refugium',
+  Impending: 'Unheilsdrohend',
+  Imprint: 'Einprägen',
+  Improvise: 'Improvisieren',
   Indestructible: 'Unzerstörbar',
+  Islandcycling: 'Inselumwandlung',
+  'Job select': 'Auftragsauswahl',
+  'Jump-start': 'Katalyse',
   Kicker: 'Bonus',
+  Landfall: 'Landung',
   Lifelink: 'Lebensverknüpfung',
+  Magecraft: 'Magiefertigkeit',
+  'Max speed': 'Maximaltempo',
   Menace: 'Bedrohlich',
+  Metalcraft: 'Metallkunst',
+  Mobilize: 'Mobilisieren',
+  Morbid: 'Morbide',
+  Mountaincycling: 'Gebirgsumwandlung',
+  Offspring: 'Nachwuchs',
+  Overload: 'Überlast',
+  Parley: 'Verhandlungen',
+  Plainscycling: 'Ebenenumwandlung',
+  Protection: 'Schutz',
   Prowess: 'Bravour',
+  Raid: 'Überfall',
+  Ravenous: 'Unersättlich',
   Reach: 'Reichweite',
+  Renew: 'Erneuerung',
+  Replicate: 'Reproduktion',
+  Riot: 'Aufruhr',
   Saddle: 'Aufsatteln',
+  Scavenge: 'Ausplündern',
+  Shroud: 'Verhüllt',
+  Spectacle: 'Spektakel',
+  'Start your engines!': 'Starte die Motoren',
+  Storm: 'Sturm',
+  Survival: 'Überlebenskunst',
+  Suspend: 'Aussetzen',
+  Swampcycling: 'Sumpfumwandlung',
+  Swampwalk: 'Sumpftarnung',
+  'Tempting offer': 'Verlockendes Angebot',
+  Threshold: 'Grenzwert',
+  Tiered: 'Stufenmagie',
+  Toxic: 'Toxisch',
   Trample: 'Verursacht Trampelschaden',
+  Transmute: 'Transmutation',
+  Unleash: 'Entfesselt',
+  Valiant: 'Tapfer',
+  Vanishing: 'Verschwinden',
   Vigilance: 'Wachsamkeit',
   Ward: 'Abwehr',
 }
@@ -416,31 +486,40 @@ export default function CubePage({ role }: { role: Role }) {
         >
           Filter · {appliedFilters.length}
         </button>
-        <button
-          onClick={async () => {
-            await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
-            setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
-          }}
-        >
-          {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
-        </button>
-        {canEdit(role) && (
-          <button onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}>
-            Preise aktualisieren
+      </div>
+      {/* Active filters on the left, plain text actions on the right. */}
+      <div className="applied-filters" aria-label="Aktive Filter und Aktionen">
+        {appliedFilters.map((filter) => (
+          <button key={filter.key} className="filter-pill" onClick={() => removeAppliedFilter(filter.key)}>
+            {filter.label}<span aria-hidden="true">×</span><span className="sr-only"> entfernen</span>
+          </button>
+        ))}
+        {filtered && (
+          <button className="link-button" onClick={resetFilters}>
+            Alle Filter zurücksetzen
           </button>
         )}
-      </div>
-      {notice && <p className="muted">{notice}</p>}
-      {(appliedFilters.length > 0 || filtered) && (
-        <div className="applied-filters" aria-label="Aktive Filter">
-          {appliedFilters.map((filter) => (
-            <button key={filter.key} className="filter-pill" onClick={() => removeAppliedFilter(filter.key)}>
-              {filter.label}<span aria-hidden="true">×</span><span className="sr-only"> entfernen</span>
+        <span className="row-actions">
+          <button
+            className="link-button"
+            onClick={async () => {
+              await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
+              setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
+            }}
+          >
+            {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
+          </button>
+          {canEdit(role) && (
+            <button
+              className="link-button"
+              onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}
+            >
+              Preise aktualisieren
             </button>
-          ))}
-          {filtered && <button className="reset-filters" onClick={resetFilters}>Alle Filter zurücksetzen</button>}
-        </div>
-      )}
+          )}
+        </span>
+      </div>
+      {notice && <p className="muted notice">{notice}</p>}
       {filterDraft && (
         <FilterDialog
           draft={filterDraft}

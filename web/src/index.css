@@ -106,13 +106,16 @@ input[type='checkbox'] { width: 18px; height: 18px; min-height: auto; padding: 0
 .pip-W { background: var(--W); } .pip-U { background: var(--U); } .pip-B { background: var(--B); }
 .pip-R { background: var(--R); } .pip-G { background: var(--G); } .pip-C { background: var(--C); }
 
-.applied-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.applied-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 4px; margin-top: 8px; }
 .filter-pill {
   min-height: 44px; display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px;
   border-color: var(--line-strong); border-radius: 999px; background: var(--panel); color: var(--text);
 }
 .filter-pill span[aria-hidden='true'] { color: var(--brass); font-size: 20px; line-height: 1; }
-.reset-filters { margin-left: auto; color: var(--muted); background: transparent; }
+.link-button { border: 0; background: transparent; color: var(--muted); padding: 6px 8px; }
+.link-button:not(:disabled):hover, .link-button:not(:disabled):focus-visible { color: var(--text); background: transparent; }
+.row-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.notice { margin: 6px 2px 0; }
 
 dialog.filter-dialog {
   position: fixed; inset: 0 0 0 auto; width: min(420px, 100vw); max-width: none;
