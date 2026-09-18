@@ -73,6 +73,8 @@ function Bars(props: { title: string; data: [string, number][]; color?: (key: st
 
 export default function StatsPage() {
   const [source, setSource] = useState<'cube' | 'mine'>('cube')
+  // Count each card once, or every copy you own.
+  const [unit, setUnit] = useState<'cards' | 'copies'>('cards')
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -92,30 +94,32 @@ export default function StatsPage() {
 
   const stats = useMemo(() => {
     if (!rows) return null
+    const weigh = (list: Row[]) =>
+      unit === 'copies' ? list.reduce((sum, row) => sum + row.qty, 0) : list.length
     const curve = ['0', '1', '2', '3', '4', '5', '6', '7+'].map((label) => {
       const value = label === '7+' ? 7 : Number(label)
       const hit = rows.filter(
         (row) =>
           !TYPE_WORDS.Land.test(row.type) && (label === '7+' ? row.cmc >= 7 : row.cmc === value),
       )
-      return [label, hit.length] as [string, number]
+      return [label, weigh(hit)] as [string, number]
     })
     return {
       cards: rows.length,
       copies: rows.reduce((sum, row) => sum + row.qty, 0),
       value: rows.reduce((sum, row) => sum + (row.price ?? 0) * row.qty, 0),
       colors: COLOR_GROUPS.map(
-        ([key, label]) => [label, rows.filter((row) => colorGroup(row) === key).length] as [string, number],
+        ([key, label]) => [label, weigh(rows.filter((row) => colorGroup(row) === key))] as [string, number],
       ),
       curve,
       types: Object.keys(TYPE_WORDS).map(
-        (type) => [type, rows.filter((row) => TYPE_WORDS[type].test(row.type)).length] as [string, number],
+        (type) => [type, weigh(rows.filter((row) => TYPE_WORDS[type].test(row.type)))] as [string, number],
       ),
       rarities: RARITIES.map(
-        ([key, label]) => [label, rows.filter((row) => row.rarity === key).length] as [string, number],
+        ([key, label]) => [label, weigh(rows.filter((row) => row.rarity === key))] as [string, number],
       ),
     }
-  }, [rows])
+  }, [rows, unit])
 
   const colorOf = (label: string) => {
     const key = COLOR_GROUPS.find(([, name]) => name === label)?.[0]
@@ -139,6 +143,15 @@ export default function StatsPage() {
         >
           <option value="cube">Cube</option>
           <option value="mine">Meine Karten</option>
+        </select>
+        <select
+          id="stats-unit"
+          aria-label="Grundlage"
+          value={unit}
+          onChange={(e) => setUnit(e.target.value as typeof unit)}
+        >
+          <option value="cards">Karten zählen</option>
+          <option value="copies">Kopien zählen</option>
         </select>
       </div>
 

@@ -1,97 +1,62 @@
 """German keyword labels, read from the German card texts on Scryfall.
 
-Run with `python3 tools/keywords_de.py`. It prints "Keyword -> Label" for every
-keyword on the cards of the sets below and writes keywords_de.json next to it.
-Only lines that hold the keyword alone give a label; keyword actions inside a
-sentence ("Mill four cards") are skipped and stay English in the filter.
+Run with `python3 tools/keywords_de.py`. It walks every keyword Scryfall knows,
+looks at a few German cards that carry it, and prints "Keyword -> Label" while
+writing keywords_de.json next to it. Paste the result into web/src/CubePage.tsx.
+
+A label is only taken when the card shows it plainly: a line that holds the
+keyword ("Fliegend", "Abwehr {2}", "Stufe aufsteigen {2}{G}") or a reminder that
+names the plain form ("(Um einen Drachen zu erblicken, …)"). Everything else
+stays English, because guessing a rules term is worse than showing the English
+one.
 """
-import json, re, sys, time, urllib.error, urllib.parse, urllib.request
-H = {'User-Agent': 'MtgScanner/0.1', 'Accept': 'application/json'}
-SETS = ['blb', 'dsk', 'fdn', 'tdm', 'rvr', 'dft', 'eoe', 'fin', 'blc', 'spg']
-WHERE = '(' + ' or '.join(f'e:{s}' for s in SETS) + ')'
+import json
+import re
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
-def get(url):
-    for attempt in range(3):
-        time.sleep(0.6)
-        try:
-            return json.load(urllib.request.urlopen(urllib.request.Request(url, headers=H)))
-        except urllib.error.HTTPError as e:
-            if e.code == 404: return None
-            if e.code == 429: time.sleep(int(e.headers.get('Retry-After', 15)))
-            else: raise
-    return None
+HEADERS = {'User-Agent': 'MtgScanner/0.1', 'Accept': 'application/json'}
+CATALOGS = ['keyword-abilities', 'keyword-actions', 'ability-words']
 
-def search(q, **kw):
-    out, url = [], 'https://api.scryfall.com/cards/search?' + urllib.parse.urlencode({'q': q, **kw})
-    while url:
-        p = get(url)
-        if not p: break
-        out += p['data']; url = p.get('next_page') if p.get('has_more') else None
-    return out
-
-english = search(f'{WHERE} lang:en game:paper', unique='cards')
-keywords = sorted({k for c in english for k in c.get('keywords', [])})
-print(f'{len(keywords)} keywords in {len(english)} cards', file=sys.stderr)
-
-# Scryfall knows which keywords are abilities and which are actions inside a
-# sentence ("Mill four cards"). Only abilities carry a label at the line start.
-ABILITIES = set(get('https://api.scryfall.com/catalog/keyword-abilities')['data']) | set(
-    get('https://api.scryfall.com/catalog/ability-words')['data']
-)
-
+# Umbrella terms that are never printed: cards say Islandwalk or Swampwalk,
+# which the German cards call Inseltarnung and Sumpftarnung.
+MANUAL = {'Landwalk': 'Landtarnung'}
+# Labels that came out as the start of an instruction ("Gift a card" ->
+# "Verschenke eine Karte"), not as the name of the keyword.
+BAD = {'Champion', 'Gift', 'Fear', "Council's dilemma"}
 SENTENCE_STARTERS = {
     'du', 'wenn', 'immer', 'diese', 'dieser', 'dieses', 'lege', 'schicke', 'ziehe', 'erzeuge',
     'bestimme', 'wähle', 'als', 'zu', 'bis', 'falls', 'solange', 'am', 'zum', 'wirf', 'das',
     'der', 'die', 'ein', 'eine', 'einen', 'es', 'sie', 'er', 'für', 'in', 'mit', 'nach', 'und',
 }
+TRAILING = {'des', 'der', 'die', 'das', 'für', 'vor', 'mit', 'von', 'im', 'zum', 'zur', 'und'}
 
-def label(en_text, de_text, keyword):
-    """German label for a keyword, taken from the matching line of the card.
 
-    Lines look like "Flying", "Ward {2}", "Kicker—{1}{R}", "Affinity for
-    artifacts" or "Flying, vigilance". A keyword action inside a sentence gives
-    no clean label and is skipped.
-    """
-    en_lines, de_lines = en_text.split('\n'), de_text.split('\n')
-    if len(en_lines) != len(de_lines):
-        return None
-    key = keyword.lower()
-    words = len(keyword.split())
-    for en, de in zip(en_lines, de_lines):
-        en, de = en.strip(), de.strip()
-        de = de.split(' (')[0].strip()  # drop the reminder text
-        low = en.lower()
-        if re.fullmatch(re.escape(key) + r'(\s*(\{[^}]*\}|\d+|x))*\.?', low):
-            return clean(re.split(r'\s\{|\s\d|\sX|—|:', de)[0])
-        if re.fullmatch(re.escape(key) + r'—.*', low):
-            return clean(de.split('—')[0])
-        # "Affinity for artifacts", "Afterlife 1": the label starts the line too,
-        # but only for keyword abilities, not for actions used in a sentence.
-        if keyword in ABILITIES and low.startswith(key + ' '):
-            first = re.split(r'—|:|\{', de)[0]
-            return clean(' '.join(first.split()[:words]))
-        parts_en = [x.strip().lower().rstrip('.') for x in en.split(',')]
-        parts_de = [x.strip().rstrip('.') for x in de.split(',')]
-        if len(parts_en) > 1 and len(parts_en) == len(parts_de) and key in parts_en:
-            return clean(parts_de[parts_en.index(key)])
-
-    # A keyword action only appears inside a sentence ("behold a Dragon"), but
-    # its reminder names the plain form: "(To behold a Dragon, …)" is
-    # "(Um einen Drachen zu erblicken, …)".
-    en_notes = re.findall(r'\(([^)]*)\)', en_text)
-    de_notes = re.findall(r'\(([^)]*)\)', de_text)
-    if len(en_notes) == len(de_notes):
-        for en_note, de_note in zip(en_notes, de_notes):
-            if re.match(r'to ' + re.escape(key) + r'\b', en_note.strip(), re.I):
-                german = re.search(r'\bzu (\w+)[,.]', de_note)
-                if german:
-                    return clean(german.group(1).capitalize())
+def get(url):
+    """One request, with a pause: Scryfall allows about two searches a second."""
+    for _ in range(3):
+        time.sleep(0.6)
+        try:
+            return json.load(urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS)))
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                return None
+            if error.code == 429:
+                time.sleep(int(error.headers.get('Retry-After', 15)))
+            else:
+                raise
     return None
 
-# Labels that came out as the start of an instruction ("Gift a card" ->
-# "Verschenke eine Karte"), not as the name of the keyword.
-BAD = {'Champion', 'Gift', 'Fear'}
-TRAILING = {'des', 'der', 'die', 'das', 'für', 'vor', 'mit', 'von', 'im', 'zum', 'zur', 'und'}
+
+def cards_with(keyword):
+    """The first page of German cards carrying the keyword."""
+    query = urllib.parse.urlencode({'q': f'lang:de keyword:"{keyword}"', 'unique': 'cards'})
+    page = get(f'https://api.scryfall.com/cards/search?{query}')
+    return (page or {}).get('data', [])
+
 
 def clean(text):
     text = text.strip().rstrip('.').strip()
@@ -102,18 +67,73 @@ def clean(text):
         return None
     return text
 
-out = {}
-for keyword in keywords:
-    cards = search(f'{WHERE} lang:de keyword:"{keyword}"', unique='cards')
-    votes = {}
-    for c in cards[:6]:
-        en, de = c.get('oracle_text'), c.get('printed_text')
-        if not en or not de: continue
-        got = label(en, de, keyword)
-        if got: votes[got] = votes.get(got, 0) + 1
-    best = max(votes, key=votes.get) if votes else None
-    if keyword in BAD:
-        best = None
-    out[keyword] = best
-    print(f'{keyword} -> {best}   {votes if len(votes) > 1 else ""}')
-json.dump(out, open('keywords_de.json', 'w'), ensure_ascii=False, indent=1)
+
+def label(english, german, keyword, abilities):
+    en_lines, de_lines = english.split('\n'), german.split('\n')
+    if len(en_lines) != len(de_lines):
+        return None
+    key = keyword.lower()
+    words = len(keyword.split())
+
+    for en, de in zip(en_lines, de_lines):
+        en, de = en.strip(), de.split(' (')[0].strip()  # drop the reminder text
+        low = en.lower()
+        if re.fullmatch(re.escape(key) + r'(\s*(\{[^}]*\}|\d+|x))*\.?', low):
+            return clean(re.split(r'\s\{|\s\d|\sX|—|:', de)[0])
+        if re.fullmatch(re.escape(key) + r'—.*', low):
+            return clean(de.split('—')[0])
+        # "Affinity for artifacts", "Level up {2}{G}": the label starts the line
+        # too, but only for abilities, not for actions used in a sentence.
+        if key in abilities and low.startswith(key + ' '):
+            return clean(' '.join(re.split(r'—|:|\{', de)[0].split()[:words]))
+        parts_en = [part.strip().lower().rstrip('.') for part in en.split(',')]
+        parts_de = [part.strip().rstrip('.') for part in de.split(',')]
+        if len(parts_en) > 1 and len(parts_en) == len(parts_de) and key in parts_en:
+            return clean(parts_de[parts_en.index(key)])
+
+    # A keyword action only appears inside a sentence ("behold a Dragon"), but
+    # its reminder names the plain form: "(To behold a Dragon, …)" is
+    # "(Um einen Drachen zu erblicken, …)".
+    en_notes = re.findall(r'\(([^)]*)\)', english)
+    de_notes = re.findall(r'\(([^)]*)\)', german)
+    if len(en_notes) == len(de_notes):
+        for en_note, de_note in zip(en_notes, de_notes):
+            if re.match(r'to ' + re.escape(key) + r'\b', en_note.strip(), re.I):
+                plain = re.search(r'\bzu (\w+)[,.]', de_note)
+                if plain:
+                    return clean(plain.group(1).capitalize())
+    return None
+
+
+def main():
+    # Lower case: the catalog writes "Level Up", the card "Level up".
+    abilities = {
+        word.lower()
+        for catalog in ['keyword-abilities', 'ability-words']
+        for word in get(f'https://api.scryfall.com/catalog/{catalog}')['data']
+    }
+    keywords = sorted(
+        {word for catalog in CATALOGS for word in get(f'https://api.scryfall.com/catalog/{catalog}')['data']}
+    )
+    print(f'{len(keywords)} keywords', file=sys.stderr)
+
+    labels = {}
+    for keyword in keywords:
+        votes = {}
+        for card in cards_with(keyword)[:6]:
+            english, german = card.get('oracle_text'), card.get('printed_text')
+            if not english or not german:
+                continue
+            found = label(english, german, keyword, abilities)
+            if found:
+                votes[found] = votes.get(found, 0) + 1
+        best = max(votes, key=votes.get) if votes else None
+        if keyword in BAD:
+            best = None
+        best = MANUAL.get(keyword, best)
+        labels[keyword] = best
+        print(f'{keyword} -> {best}')
+    json.dump(labels, open('keywords_de.json', 'w'), ensure_ascii=False, indent=1)
+
+
+main()
