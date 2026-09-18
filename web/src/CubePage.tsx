@@ -124,10 +124,21 @@ export default function CubePage({ role }: { role: Role }) {
       }
     }
     load()
-    // Quietly pick up other people's scans. Filters, scrolling and the open
-    // card stay as they are; a hidden tab skips the request.
-    const timer = setInterval(() => {
-      if (!document.hidden) load()
+    // Quietly pick up other people's scans. Reloading everything every 15
+    // seconds would move about 2 MB each time, so the check asks for the id of
+    // the newest change and only then loads the cards. A hidden tab is skipped.
+    let lastEvent: number | null = null
+    const timer = setInterval(async () => {
+      if (document.hidden) return
+      const { data } = await supabase
+        .from('card_events')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const newest = (data?.id as number | undefined) ?? null
+      if (lastEvent !== null && newest !== lastEvent) load()
+      lastEvent = newest
     }, 15000)
     return () => {
       stop = true
