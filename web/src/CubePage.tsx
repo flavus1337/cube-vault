@@ -27,6 +27,30 @@ const TYPES: [string, RegExp][] = [
   ['Planeswalker', /Planeswalker/i],
 ]
 
+// German names for the keywords we are sure about; the rest stay as Scryfall
+// writes them, so a new keyword still shows up in the filter.
+const KEYWORDS: Record<string, string> = {
+  Flying: 'Fliegend',
+  Trample: 'Verursacht Trampelschaden',
+  Deathtouch: 'Todesberührung',
+  Lifelink: 'Lebensverknüpfung',
+  Haste: 'Eile',
+  Vigilance: 'Wachsamkeit',
+  'First strike': 'Erstschlag',
+  'Double strike': 'Doppelschlag',
+  Menace: 'Bedrohlich',
+  Reach: 'Reichweite',
+  Defender: 'Verteidiger',
+  Indestructible: 'Unzerstörbar',
+  Hexproof: 'Fluchsicher',
+  Flash: 'Aufblitzen',
+  Prowess: 'Wagemut',
+  Scry: 'Hellsicht',
+  Equip: 'Ausrüsten',
+  Kicker: 'Aufpreis',
+}
+const keywordLabel = (key: string) => KEYWORDS[key] ?? key
+
 const countCopies = (rows: Copy[]) => {
   const counts = new Map<string, number>()
   for (const c of rows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
@@ -61,6 +85,9 @@ export default function CubePage({ role }: { role: Role }) {
   const [rarity, setRarity] = useState('')
   const [cardType, setCardType] = useState('')
   const [cmc, setCmc] = useState('')
+  const [keyword, setKeyword] = useState('')
+  // On: only cards that need exactly the picked colours, e.g. mono blue.
+  const [exactColors, setExactColors] = useState(false)
   const [setCode, setSetCode] = useState('')
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
@@ -101,8 +128,26 @@ export default function CubePage({ role }: { role: Role }) {
     }
   }, [])
 
+  const colorsMatch = (c: Card) => {
+    if (!colors.size) return true
+    const have = c.colors.split('').filter(Boolean)
+    const wanted = [...colors].filter((col) => col !== 'C')
+    if (!exactColors) {
+      return [...colors].every((col) => (col === 'C' ? !have.length : have.includes(col)))
+    }
+    if (!wanted.length) return !have.length // only colourless picked
+    return have.length === wanted.length && wanted.every((col) => have.includes(col))
+  }
+
+  // Keywords that actually appear on the cards in the database.
+  const keywords = useMemo(
+    () => [...new Set(cards.flatMap((c) => c.keywords))].sort((a, b) => keywordLabel(a).localeCompare(keywordLabel(b), 'de')),
+    [cards],
+  )
+
   const filtered =
-    Boolean(text || colors.size || rarity || cardType || cmc || setCode || showExcluded) ||
+    Boolean(text || colors.size || rarity || cardType || cmc || keyword || setCode || showExcluded) ||
+    exactColors ||
     show !== 'owned' ||
     sort !== 'name'
 
@@ -112,6 +157,8 @@ export default function CubePage({ role }: { role: Role }) {
     setRarity('')
     setCardType('')
     setCmc('')
+    setKeyword('')
+    setExactColors(false)
     setSetCode('')
     setShowExcluded(false)
     setShow('owned')
@@ -131,7 +178,8 @@ export default function CubePage({ role }: { role: Role }) {
         (!rarity || c.rarity === rarity) &&
         (!cmc || (cmc === '7' ? c.cmc >= 7 : c.cmc === Number(cmc))) &&
         (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
-        [...colors].every((col) => (col === 'C' ? !c.colors : c.colors.includes(col))) &&
+        colorsMatch(c) &&
+        (!keyword || c.keywords.includes(keyword)) &&
         [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
     )
     const byName = (a: Card, b: Card) => name(a).localeCompare(name(b), 'de')
@@ -143,7 +191,7 @@ export default function CubePage({ role }: { role: Role }) {
         a.set_code.localeCompare(b.set_code) || parseInt(a.number, 10) - parseInt(b.number, 10),
     }
     return result.sort(sorters[sort])
-  }, [cards, sets, copies, text, colors, rarity, cardType, cmc, setCode, sort, showExcluded, show])
+  }, [cards, sets, copies, text, colors, exactColors, rarity, cardType, cmc, keyword, setCode, sort, showExcluded, show])
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
@@ -215,6 +263,25 @@ export default function CubePage({ role }: { role: Role }) {
           {cubeSets.map((s) => (
             <option key={s.code} value={s.code}>
               {s.parent_code ? `↳ ${s.name}` : s.name}
+            </option>
+          ))}
+        </select>
+        {colors.size > 0 && (
+          <label className="check">
+            <input
+              id="exact-colors"
+              type="checkbox"
+              checked={exactColors}
+              onChange={(e) => setExactColors(e.target.checked)}
+            />
+            Nur diese Farbe
+          </label>
+        )}
+        <select id="keyword" aria-label="Schlüsselwort" value={keyword} onChange={(e) => setKeyword(e.target.value)}>
+          <option value="">Alle Schlüsselwörter</option>
+          {keywords.map((key) => (
+            <option key={key} value={key}>
+              {keywordLabel(key)}
             </option>
           ))}
         </select>
