@@ -56,6 +56,38 @@ const KEYWORDS: Record<string, string> = {
 }
 const keywordLabel = (key: string) => KEYWORDS[key] ?? key
 
+type AdvancedFilters = {
+  colors: Set<string>
+  setCode: string
+  keyword: string
+  cardType: string
+  cmc: string
+  rarity: string
+  sort: string
+  showExcluded: boolean
+  exactColors: boolean
+}
+
+type AppliedFilterKey = 'colors' | 'set' | 'keyword' | 'type' | 'cmc' | 'rarity' | 'excluded'
+
+const EMPTY_ADVANCED: Omit<AdvancedFilters, 'colors'> = {
+  setCode: '',
+  keyword: '',
+  cardType: '',
+  cmc: '',
+  rarity: '',
+  sort: 'name',
+  showExcluded: false,
+  exactColors: false,
+}
+
+const SORTS: Record<string, string> = {
+  name: 'Name',
+  cmc: 'Manawert',
+  price: 'Preis',
+  number: 'Set-Nummer',
+}
+
 const countCopies = (rows: Copy[]) => {
   const counts = new Map<string, number>()
   for (const c of rows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
@@ -99,7 +131,8 @@ export default function CubePage({ role }: { role: Role }) {
   // The cube is what you own. Missing cards only exist after a whole-set import.
   const [show, setShow] = useState<'owned' | 'missing' | 'all'>('owned')
   const [selected, setSelected] = useState<Card | null>(null)
-  const [filterPanel, setFilterPanel] = useState(false)
+  const [filterDraft, setFilterDraft] = useState<AdvancedFilters | null>(null)
+  const filterOpener = useRef<HTMLButtonElement>(null)
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
@@ -141,17 +174,6 @@ export default function CubePage({ role }: { role: Role }) {
     [cards],
   )
 
-  const activeFilters =
-    (text ? 1 : 0) +
-    colors.size +
-    (exactColors ? 1 : 0) +
-    (keyword ? 1 : 0) +
-    (cardType ? 1 : 0) +
-    (cmc ? 1 : 0) +
-    (rarity ? 1 : 0) +
-    (setCode ? 1 : 0) +
-    (showExcluded ? 1 : 0)
-
   const filtered =
     Boolean(text || colors.size || rarity || cardType || cmc || keyword || setCode || showExcluded) ||
     exactColors ||
@@ -172,7 +194,68 @@ export default function CubePage({ role }: { role: Role }) {
     setSort('name')
   }
 
-  const cubeSets = sets.filter((s) => s.in_cube)
+  const cubeSets = useMemo(() => sets.filter((set) => set.in_cube), [sets])
+  const appliedFilters = useMemo(() => {
+    const result: { key: AppliedFilterKey; label: string }[] = []
+    if (colors.size) {
+      result.push({
+        key: 'colors',
+        label: `Farben: ${[...colors].map((color) => COLOR_LABELS[color]).join(', ')}${exactColors ? ' · exakt' : ''}`,
+      })
+    }
+    if (setCode) result.push({ key: 'set', label: `Set: ${cubeSets.find((set) => set.code === setCode)?.name ?? setCode}` })
+    if (keyword) result.push({ key: 'keyword', label: `Schlüsselwort: ${keywordLabel(keyword)}` })
+    if (cardType) result.push({ key: 'type', label: `Typ: ${cardType}` })
+    if (cmc) result.push({ key: 'cmc', label: `Manawert: ${cmc === '7' ? '7+' : cmc}` })
+    if (rarity) result.push({ key: 'rarity', label: `Seltenheit: ${RARITY[rarity] ?? rarity}` })
+    if (showExcluded) result.push({ key: 'excluded', label: 'Ausgeschlossene zeigen' })
+    return result
+  }, [colors, exactColors, setCode, cubeSets, keyword, cardType, cmc, rarity, showExcluded])
+
+  function removeAppliedFilter(key: AppliedFilterKey) {
+    if (key === 'colors') {
+      setColors(new Set())
+      setExactColors(false)
+    } else if (key === 'set') setSetCode('')
+    else if (key === 'keyword') setKeyword('')
+    else if (key === 'type') setCardType('')
+    else if (key === 'cmc') setCmc('')
+    else if (key === 'rarity') setRarity('')
+    else setShowExcluded(false)
+  }
+
+  function openFilters() {
+    setFilterDraft({
+      colors: new Set(colors),
+      setCode,
+      keyword,
+      cardType,
+      cmc,
+      rarity,
+      sort,
+      showExcluded,
+      exactColors: colors.size > 0 && exactColors,
+    })
+  }
+
+  function closeFilters() {
+    setFilterDraft(null)
+    requestAnimationFrame(() => filterOpener.current?.focus())
+  }
+
+  function applyFilters(draft: AdvancedFilters) {
+    setColors(new Set(draft.colors))
+    setSetCode(draft.setCode)
+    setKeyword(draft.keyword)
+    setCardType(draft.cardType)
+    setCmc(draft.cmc)
+    setRarity(draft.rarity)
+    setSort(draft.sort)
+    setShowExcluded(draft.showExcluded)
+    setExactColors(draft.colors.size > 0 && draft.exactColors)
+    closeFilters()
+  }
+
   const list = useMemo(() => {
     const colorsMatch = (c: Card) => {
       if (!colors.size) return true
@@ -258,104 +341,60 @@ export default function CubePage({ role }: { role: Role }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <button id="filters" aria-expanded={filterPanel} onClick={() => setFilterPanel(!filterPanel)}>
-          Filter{activeFilters ? ` (${activeFilters})` : ''}
-        </button>
+        <div className="colors" role="group" aria-label="Farben">
+          {COLORS.map((color) => (
+            <button
+              key={color}
+              className={`pip pip-${color}`}
+              aria-label={`${COLOR_LABELS[color]} filtern`}
+              aria-pressed={colors.has(color)}
+              onClick={() => {
+                const next = new Set(colors)
+                if (next.has(color)) next.delete(color)
+                else next.add(color)
+                setColors(next)
+                if (!next.size) setExactColors(false)
+              }}
+            >
+              {color}
+            </button>
+          ))}
+        </div>
         <select id="show" aria-label="Anzeigen" value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
           <option value="owned">Vorhandene Karten</option>
           <option value="missing">Fehlende Karten</option>
           <option value="all">Alle Karten</option>
         </select>
+        <button
+          ref={filterOpener}
+          id="filters"
+          aria-controls="advanced-filters"
+          aria-expanded={filterDraft !== null}
+          aria-haspopup="dialog"
+          onClick={openFilters}
+        >
+          Filter · {appliedFilters.length}
+        </button>
       </div>
-      {filterPanel && (
-        <div className="filter-panel">
-          <div className="colors">
-            {COLORS.map((col) => (
-              <button
-                key={col}
-                className={`pip pip-${col}`}
-                aria-label={`${COLOR_LABELS[col]} filtern`}
-                aria-pressed={colors.has(col)}
-                onClick={() => {
-                  const next = new Set(colors)
-                  if (next.has(col)) next.delete(col)
-                  else next.add(col)
-                  setColors(next)
-                }}
-              >
-                {col}
-              </button>
-            ))}
-          </div>
-          <select id="set" aria-label="Set" value={setCode} onChange={(e) => setSetCode(e.target.value)}>
-            <option value="">Alle Sets</option>
-            {cubeSets.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.parent_code ? `↳ ${s.name}` : s.name}
-              </option>
-            ))}
-          </select>
-          {colors.size > 0 && (
-            <label className="check">
-              <input
-                id="exact-colors"
-                type="checkbox"
-                checked={exactColors}
-                onChange={(e) => setExactColors(e.target.checked)}
-              />
-              Nur diese Farbe
-            </label>
-          )}
-          <select id="keyword" aria-label="Schlüsselwort" value={keyword} onChange={(e) => setKeyword(e.target.value)}>
-            <option value="">Alle Schlüsselwörter</option>
-            {keywords.map((key) => (
-              <option key={key} value={key}>
-                {keywordLabel(key)}
-              </option>
-            ))}
-          </select>
-          <select id="type" aria-label="Kartentyp" value={cardType} onChange={(e) => setCardType(e.target.value)}>
-            <option value="">Alle Typen</option>
-            {TYPES.map(([label]) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select id="cmc" aria-label="Manawert" value={cmc} onChange={(e) => setCmc(e.target.value)}>
-            <option value="">Jeder Manawert</option>
-            {['0', '1', '2', '3', '4', '5', '6'].map((n) => (
-              <option key={n} value={n}>
-                {n} Mana
-              </option>
-            ))}
-            <option value="7">7+ Mana</option>
-          </select>
-          <select id="rarity" aria-label="Seltenheit" value={rarity} onChange={(e) => setRarity(e.target.value)}>
-            <option value="">Alle Seltenheiten</option>
-            {Object.entries(RARITY).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select id="sort" aria-label="Sortierung" value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="name">Name</option>
-            <option value="cmc">Manawert</option>
-            <option value="price">Preis</option>
-            <option value="number">Set-Nummer</option>
-          </select>
-          <label className="check">
-            <input
-              id="show-excluded"
-              type="checkbox"
-              checked={showExcluded}
-              onChange={(e) => setShowExcluded(e.target.checked)}
-            />
-            Ausgeschlossene zeigen
-          </label>
-          {filtered && <button onClick={resetFilters}>Filter zurücksetzen</button>}
+      {(appliedFilters.length > 0 || filtered) && (
+        <div className="applied-filters" aria-label="Aktive Filter">
+          {appliedFilters.map((filter) => (
+            <button key={filter.key} className="filter-pill" onClick={() => removeAppliedFilter(filter.key)}>
+              {filter.label}<span aria-hidden="true">×</span><span className="sr-only"> entfernen</span>
+            </button>
+          ))}
+          {filtered && <button className="reset-filters" onClick={resetFilters}>Alle Filter zurücksetzen</button>}
         </div>
+      )}
+      {filterDraft && (
+        <FilterDialog
+          draft={filterDraft}
+          sets={cubeSets}
+          keywords={keywords}
+          onDraftChange={setFilterDraft}
+          onApply={applyFilters}
+          onDiscard={closeFilters}
+        />
       )}
       <div className="toolbar">
         <button
@@ -418,6 +457,203 @@ export default function CubePage({ role }: { role: Role }) {
         />
       )}
     </main>
+  )
+}
+
+function FilterDialog(props: {
+  draft: AdvancedFilters
+  sets: CubeSet[]
+  keywords: string[]
+  onDraftChange: (draft: AdvancedFilters) => void
+  onApply: (draft: AdvancedFilters) => void
+  onDiscard: () => void
+}) {
+  const { draft, sets, keywords, onDraftChange, onApply, onDiscard } = props
+  const ref = useRef<HTMLDialogElement>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+  const [setSearch, setSetSearch] = useState('')
+  const [keywordSearch, setKeywordSearch] = useState('')
+  const setDraft = <K extends keyof AdvancedFilters>(key: K, value: AdvancedFilters[K]) =>
+    onDraftChange({ ...draft, [key]: value })
+
+  const visibleSets = sets.filter((set) =>
+    `${set.name} ${set.code}`.toLocaleLowerCase('de').includes(setSearch.trim().toLocaleLowerCase('de')),
+  )
+  const visibleKeywords = keywords.filter((key) =>
+    `${keywordLabel(key)} ${key}`.toLocaleLowerCase('de').includes(keywordSearch.trim().toLocaleLowerCase('de')),
+  )
+
+  useEffect(() => {
+    const dialog = ref.current
+    if (!dialog) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    if (dialog.isConnected && !dialog.open) dialog.showModal()
+    const focusFrame = requestAnimationFrame(() => closeButton.current?.focus())
+    return () => {
+      cancelAnimationFrame(focusFrame)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  function closeOnBackdrop(event: React.MouseEvent<HTMLDialogElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const onDialog =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+    if (!onDialog) event.currentTarget.close()
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      id="advanced-filters"
+      className="filter-dialog"
+      aria-labelledby="advanced-filters-title"
+      onClick={closeOnBackdrop}
+      onClose={onDiscard}
+    >
+      <div className="filter-dialog-head">
+        <div>
+          <p className="filter-eyebrow">Kartensuche</p>
+          <h2 id="advanced-filters-title">Erweiterte Filter</h2>
+        </div>
+        <button ref={closeButton} className="dialog-close" aria-label="Filter schließen" onClick={() => ref.current?.close()}>
+          ×
+        </button>
+      </div>
+
+      <div className="filter-dialog-body">
+        <fieldset className="filter-fieldset searchable-options">
+          <legend>Set</legend>
+          <label htmlFor="filter-set-search">Sets durchsuchen</label>
+          <input
+            id="filter-set-search"
+            type="search"
+            placeholder="Name oder Code"
+            value={setSearch}
+            onChange={(event) => setSetSearch(event.target.value)}
+          />
+          <div className="radio-list">
+            {!setSearch && (
+              <label>
+                <input type="radio" name="filter-set" checked={!draft.setCode} onChange={() => setDraft('setCode', '')} />
+                Alle Sets
+              </label>
+            )}
+            {visibleSets.map((set) => (
+              <label key={set.code}>
+                <input
+                  type="radio"
+                  name="filter-set"
+                  value={set.code}
+                  checked={draft.setCode === set.code}
+                  onChange={() => setDraft('setCode', set.code)}
+                />
+                <span>{set.parent_code ? `↳ ${set.name}` : set.name}<small>{set.code.toUpperCase()}</small></span>
+              </label>
+            ))}
+            {!visibleSets.length && <p className="muted option-empty">Kein Set gefunden.</p>}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset searchable-options">
+          <legend>Schlüsselwort</legend>
+          <label htmlFor="filter-keyword-search">Schlüsselwörter durchsuchen</label>
+          <input
+            id="filter-keyword-search"
+            type="search"
+            placeholder="Begriff"
+            value={keywordSearch}
+            onChange={(event) => setKeywordSearch(event.target.value)}
+          />
+          <div className="radio-list">
+            {!keywordSearch && (
+              <label>
+                <input type="radio" name="filter-keyword" checked={!draft.keyword} onChange={() => setDraft('keyword', '')} />
+                Alle Schlüsselwörter
+              </label>
+            )}
+            {visibleKeywords.map((key) => (
+              <label key={key}>
+                <input
+                  type="radio"
+                  name="filter-keyword"
+                  value={key}
+                  checked={draft.keyword === key}
+                  onChange={() => setDraft('keyword', key)}
+                />
+                {keywordLabel(key)}
+              </label>
+            ))}
+            {!visibleKeywords.length && <p className="muted option-empty">Kein Schlüsselwort gefunden.</p>}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset">
+          <legend>Kartentyp</legend>
+          <div className="choice-pills">
+            <button aria-pressed={!draft.cardType} onClick={() => setDraft('cardType', '')}>Alle</button>
+            {TYPES.map(([label]) => (
+              <button key={label} aria-pressed={draft.cardType === label} onClick={() => setDraft('cardType', label)}>{label}</button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset">
+          <legend>Manawert</legend>
+          <div className="choice-pills">
+            <button aria-pressed={!draft.cmc} onClick={() => setDraft('cmc', '')}>Alle</button>
+            {['0', '1', '2', '3', '4', '5', '6', '7'].map((value) => (
+              <button key={value} aria-pressed={draft.cmc === value} onClick={() => setDraft('cmc', value)}>
+                {value === '7' ? '7+' : value}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset">
+          <legend>Seltenheit</legend>
+          <div className="choice-pills">
+            <button aria-pressed={!draft.rarity} onClick={() => setDraft('rarity', '')}>Alle</button>
+            {Object.entries(RARITY).map(([value, label]) => (
+              <button key={value} aria-pressed={draft.rarity === value} onClick={() => setDraft('rarity', value)}>{label}</button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset">
+          <legend>Sortierung</legend>
+          <div className="choice-pills">
+            {Object.entries(SORTS).map(([value, label]) => (
+              <button key={value} aria-pressed={draft.sort === value} onClick={() => setDraft('sort', value)}>{label}</button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="filter-fieldset filter-toggles">
+          <legend>Weitere Optionen</legend>
+          <button aria-pressed={draft.showExcluded} onClick={() => setDraft('showExcluded', !draft.showExcluded)}>
+            Ausgeschlossene zeigen
+          </button>
+          <button
+            aria-pressed={draft.colors.size > 0 && draft.exactColors}
+            disabled={!draft.colors.size}
+            onClick={() => setDraft('exactColors', !draft.exactColors)}
+          >
+            Nur gewählte Farben
+          </button>
+          {!draft.colors.size && <p className="muted option-hint">Wähle zuerst mindestens eine Farbe in der Filterleiste.</p>}
+        </fieldset>
+      </div>
+
+      <div className="filter-dialog-actions">
+        <button onClick={() => onDraftChange({ colors: new Set(draft.colors), ...EMPTY_ADVANCED })}>Zurücksetzen</button>
+        <button className="primary" onClick={() => onApply(draft)}>Filter anwenden</button>
+      </div>
+    </dialog>
   )
 }
 
