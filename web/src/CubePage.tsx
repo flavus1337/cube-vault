@@ -48,6 +48,15 @@ const KEYWORDS: Record<string, string> = {
   Scry: 'Hellsicht',
   Equip: 'Ausrüsten',
   Kicker: 'Aufpreis',
+  Enchant: 'Verzaubern',
+  Protection: 'Schutz',
+  Cycling: 'Umlauf',
+  Flashback: 'Rückblick',
+  Convoke: 'Zusammenkunft',
+  Escape: 'Flucht',
+  Crew: 'Besatzung',
+  Explore: 'Erkunden',
+  Landfall: 'Landfall',
 }
 const keywordLabel = (key: string) => KEYWORDS[key] ?? key
 
@@ -94,6 +103,7 @@ export default function CubePage({ role }: { role: Role }) {
   // The cube is what you own. Missing cards only exist after a whole-set import.
   const [show, setShow] = useState<'owned' | 'missing' | 'all'>('owned')
   const [selected, setSelected] = useState<Card | null>(null)
+  const [filterPanel, setFilterPanel] = useState(false)
 
   useEffect(() => {
     let stop = false
@@ -133,6 +143,17 @@ export default function CubePage({ role }: { role: Role }) {
     () => [...new Set(cards.flatMap((c) => c.keywords))].sort((a, b) => keywordLabel(a).localeCompare(keywordLabel(b), 'de')),
     [cards],
   )
+
+  const activeFilters =
+    (text ? 1 : 0) +
+    colors.size +
+    (exactColors ? 1 : 0) +
+    (keyword ? 1 : 0) +
+    (cardType ? 1 : 0) +
+    (cmc ? 1 : 0) +
+    (rarity ? 1 : 0) +
+    (setCode ? 1 : 0) +
+    (showExcluded ? 1 : 0)
 
   const filtered =
     Boolean(text || colors.size || rarity || cardType || cmc || keyword || setCode || showExcluded) ||
@@ -240,102 +261,105 @@ export default function CubePage({ role }: { role: Role }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="colors">
-          {COLORS.map((col) => (
-            <button
-              key={col}
-              className={`pip pip-${col}`}
-              aria-label={`${COLOR_LABELS[col]} filtern`}
-              aria-pressed={colors.has(col)}
-              onClick={() => {
-                const next = new Set(colors)
-                if (next.has(col)) next.delete(col)
-                else next.add(col)
-                setColors(next)
-              }}
-            >
-              {col}
-            </button>
-          ))}
-        </div>
-        <select id="set" aria-label="Set" value={setCode} onChange={(e) => setSetCode(e.target.value)}>
-          <option value="">Alle Sets</option>
-          {cubeSets.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.parent_code ? `↳ ${s.name}` : s.name}
-            </option>
-          ))}
-        </select>
-        {colors.size > 0 && (
-          <label className="check">
-            <input
-              id="exact-colors"
-              type="checkbox"
-              checked={exactColors}
-              onChange={(e) => setExactColors(e.target.checked)}
-            />
-            Nur diese Farbe
-          </label>
-        )}
-        <select id="keyword" aria-label="Schlüsselwort" value={keyword} onChange={(e) => setKeyword(e.target.value)}>
-          <option value="">Alle Schlüsselwörter</option>
-          {keywords.map((key) => (
-            <option key={key} value={key}>
-              {keywordLabel(key)}
-            </option>
-          ))}
-        </select>
-        <select id="type" aria-label="Kartentyp" value={cardType} onChange={(e) => setCardType(e.target.value)}>
-          <option value="">Alle Typen</option>
-          {TYPES.map(([label]) => (
-            <option key={label} value={label}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select id="cmc" aria-label="Manawert" value={cmc} onChange={(e) => setCmc(e.target.value)}>
-          <option value="">Jeder Manawert</option>
-          {['0', '1', '2', '3', '4', '5', '6'].map((n) => (
-            <option key={n} value={n}>
-              {n} Mana
-            </option>
-          ))}
-          <option value="7">7+ Mana</option>
-        </select>
-        <select id="rarity" aria-label="Seltenheit" value={rarity} onChange={(e) => setRarity(e.target.value)}>
-          <option value="">Alle Seltenheiten</option>
-          {Object.entries(RARITY).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select id="sort" aria-label="Sortierung" value={sort} onChange={(e) => setSort(e.target.value)}>
-          <option value="name">Name</option>
-          <option value="cmc">Manawert</option>
-          <option value="price">Preis</option>
-          <option value="number">Set-Nummer</option>
-        </select>
-        <label className="check">
-          <input
-            id="show-excluded"
-            type="checkbox"
-            checked={showExcluded}
-            onChange={(e) => setShowExcluded(e.target.checked)}
-          />
-          Ausgeschlossene zeigen
-        </label>
-        {filtered && (
-          <button id="reset" onClick={resetFilters}>
-            Filter zurücksetzen
-          </button>
-        )}
+        <button id="filters" aria-expanded={filterPanel} onClick={() => setFilterPanel(!filterPanel)}>
+          Filter{activeFilters ? ` (${activeFilters})` : ''}
+        </button>
         <select id="show" aria-label="Anzeigen" value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
           <option value="owned">Vorhandene Karten</option>
           <option value="missing">Fehlende Karten</option>
           <option value="all">Alle Karten</option>
         </select>
       </div>
+      {filterPanel && (
+        <div className="filter-panel">
+          <div className="colors">
+            {COLORS.map((col) => (
+              <button
+                key={col}
+                className={`pip pip-${col}`}
+                aria-label={`${COLOR_LABELS[col]} filtern`}
+                aria-pressed={colors.has(col)}
+                onClick={() => {
+                  const next = new Set(colors)
+                  if (next.has(col)) next.delete(col)
+                  else next.add(col)
+                  setColors(next)
+                }}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
+          <select id="set" aria-label="Set" value={setCode} onChange={(e) => setSetCode(e.target.value)}>
+            <option value="">Alle Sets</option>
+            {cubeSets.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.parent_code ? `↳ ${s.name}` : s.name}
+              </option>
+            ))}
+          </select>
+          {colors.size > 0 && (
+            <label className="check">
+              <input
+                id="exact-colors"
+                type="checkbox"
+                checked={exactColors}
+                onChange={(e) => setExactColors(e.target.checked)}
+              />
+              Nur diese Farbe
+            </label>
+          )}
+          <select id="keyword" aria-label="Schlüsselwort" value={keyword} onChange={(e) => setKeyword(e.target.value)}>
+            <option value="">Alle Schlüsselwörter</option>
+            {keywords.map((key) => (
+              <option key={key} value={key}>
+                {keywordLabel(key)}
+              </option>
+            ))}
+          </select>
+          <select id="type" aria-label="Kartentyp" value={cardType} onChange={(e) => setCardType(e.target.value)}>
+            <option value="">Alle Typen</option>
+            {TYPES.map(([label]) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select id="cmc" aria-label="Manawert" value={cmc} onChange={(e) => setCmc(e.target.value)}>
+            <option value="">Jeder Manawert</option>
+            {['0', '1', '2', '3', '4', '5', '6'].map((n) => (
+              <option key={n} value={n}>
+                {n} Mana
+              </option>
+            ))}
+            <option value="7">7+ Mana</option>
+          </select>
+          <select id="rarity" aria-label="Seltenheit" value={rarity} onChange={(e) => setRarity(e.target.value)}>
+            <option value="">Alle Seltenheiten</option>
+            {Object.entries(RARITY).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select id="sort" aria-label="Sortierung" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="name">Name</option>
+            <option value="cmc">Manawert</option>
+            <option value="price">Preis</option>
+            <option value="number">Set-Nummer</option>
+          </select>
+          <label className="check">
+            <input
+              id="show-excluded"
+              type="checkbox"
+              checked={showExcluded}
+              onChange={(e) => setShowExcluded(e.target.checked)}
+            />
+            Ausgeschlossene zeigen
+          </label>
+          {filtered && <button onClick={resetFilters}>Filter zurücksetzen</button>}
+        </div>
+      )}
       <p className="muted summary">
         {ownedCount} Karten · {copyCount} Kopien · {euro(value)}
       </p>

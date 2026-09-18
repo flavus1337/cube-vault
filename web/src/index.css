@@ -199,3 +199,8 @@ tr.waiting td { background: #e8a24a14; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .tile:hover, .tile:focus-visible, .pip:hover, .pip:focus-visible { transform: none; }
 }
+
+.filter-panel {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+  padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+}
