@@ -2,7 +2,11 @@
 
 Run with `python3 tools/keywords_de.py`. It walks every keyword Scryfall knows,
 looks at a few German cards that carry it, and prints "Keyword -> Label" while
-writing keywords_de.json next to it. Paste the result into web/src/CubePage.tsx.
+writing tools/keywords_de.json. Paste the result into web/src/CubePage.tsx.
+
+Scryfall throttles hard, so a full run over all catalogs takes a long time.
+tools/keywords_de.json holds the labels found so far; rerun when new sets add
+keywords that still show up in English.
 
 A label is only taken when the card shows it plainly: a line that holds the
 keyword ("Fliegend", "Abwehr {2}", "Stufe aufsteigen {2}{G}") or a reminder that
@@ -133,7 +137,7 @@ def main():
         best = MANUAL.get(keyword, best)
         labels[keyword] = best
         print(f'{keyword} -> {best}')
-    json.dump(labels, open('keywords_de.json', 'w'), ensure_ascii=False, indent=1)
+    json.dump(labels, open('tools/keywords_de.json', 'w'), ensure_ascii=False, indent=1)
 
 
 main()

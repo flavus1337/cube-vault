@@ -84,6 +84,8 @@ const KEYWORDS: Record<string, string> = {
   'Jump-start': 'Katalyse',
   Kicker: 'Bonus',
   Landfall: 'Landung',
+  Landwalk: 'Landtarnung',
+  'Level Up': 'Stufe aufsteigen',
   Lifelink: 'Lebensverknüpfung',
   Magecraft: 'Magiefertigkeit',
   'Max speed': 'Maximaltempo',
