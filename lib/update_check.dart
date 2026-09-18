@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const _repo = 'flavus1337/cube-vault';
-const apkUrl = 'https://github.com/$_repo/releases/latest/download/cube-vault.apk';
+const apkUrl =
+    'https://github.com/$_repo/releases/latest/download/cube-vault.apk';
 
 /// Returns the tag of the newest release when it is newer than [current],
 /// otherwise null. Tags look like "v0.1.2".
@@ -13,7 +14,8 @@ Future<String?> newerRelease(String current) async {
     headers: const {'Accept': 'application/vnd.github+json'},
   );
   if (res.statusCode != 200) return null;
-  final tag = (jsonDecode(res.body) as Map<String, dynamic>)['tag_name'] as String?;
+  final tag =
+      (jsonDecode(res.body) as Map<String, dynamic>)['tag_name'] as String?;
   return tag != null && isNewer(tag, current) ? tag : null;
 }
 

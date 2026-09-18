@@ -6,7 +6,8 @@ SupabaseClient get _sb => Supabase.instance.client;
 
 /// Cube Vault data in Supabase (schema: supabase/migrations).
 class Db {
-  static Future<void> open() => Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
+  static Future<void> open() =>
+      Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
 
   static Session? get session => _sb.auth.currentSession;
   static Stream<AuthState> get authChanges => _sb.auth.onAuthStateChange;
@@ -50,13 +51,19 @@ class Db {
       if (page.length < 1000) break;
     }
     for (final r in rows) {
-      r['qty'] = (r['copies'] as List).fold<int>(0, (s, c) => s + (c['qty'] as int));
+      r['qty'] = (r['copies'] as List).fold<int>(
+        0,
+        (s, c) => s + (c['qty'] as int),
+      );
     }
     return rows;
   }
 
   /// The cube card for a scanned print: same set, same oracle id.
-  static Future<Map<String, Object?>?> findCard(String setCode, String oracleId) => _sb
+  static Future<Map<String, Object?>?> findCard(
+    String setCode,
+    String oracleId,
+  ) => _sb
       .from('cards')
       .select('*, sets(name, in_cube)')
       .eq('set_code', setCode)
@@ -65,7 +72,8 @@ class Db {
 
   /// Set codes in the cube, upper case, to fix OCR mistakes while scanning.
   static Future<Set<String>> setCodes() async => {
-    for (final r in await _sb.from('sets').select('code')) '${r['code']}'.toUpperCase(),
+    for (final r in await _sb.from('sets').select('code'))
+      '${r['code']}'.toUpperCase(),
   };
 
   static Future<Map<String, Object?>?> findSet(String code) =>
@@ -73,7 +81,10 @@ class Db {
 
   /// [set] is Scryfall's set object. [parentCode] links a bonus sheet or a
   /// commander deck to the main set it is drafted with.
-  static Future<void> addSet(Map<String, dynamic> set, {String? parentCode}) async {
+  static Future<void> addSet(
+    Map<String, dynamic> set, {
+    String? parentCode,
+  }) async {
     await _sb.from('sets').upsert({
       'code': set['code'],
       'name': set['name'],
@@ -92,7 +103,10 @@ class Db {
     for (var i = 0; i < rows.length; i += 200) {
       await _sb
           .from('cards')
-          .upsert(rows.sublist(i, (i + 200).clamp(0, rows.length)), ignoreDuplicates: true);
+          .upsert(
+            rows.sublist(i, (i + 200).clamp(0, rows.length)),
+            ignoreDuplicates: true,
+          );
     }
   }
 
@@ -103,13 +117,25 @@ class Db {
   }
 
   /// Both return how many copies of the card exist afterwards.
-  static Future<int> addCopy(String printId, String cardId, String lang) async =>
+  static Future<int> addCopy(
+    String printId,
+    String cardId,
+    String lang,
+  ) async =>
       await _sb.rpc(
             'add_copy',
-            params: {'p_print_id': printId, 'p_card_id': cardId, 'p_lang': lang},
+            params: {
+              'p_print_id': printId,
+              'p_card_id': cardId,
+              'p_lang': lang,
+            },
           )
           as int;
 
   static Future<int> removeCopy(String printId, String cardId) async =>
-      await _sb.rpc('remove_copy', params: {'p_print_id': printId, 'p_card_id': cardId}) as int;
+      await _sb.rpc(
+            'remove_copy',
+            params: {'p_print_id': printId, 'p_card_id': cardId},
+          )
+          as int;
 }

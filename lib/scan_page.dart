@@ -19,6 +19,9 @@ typedef _Found = ({
   String lang,
   Map<String, Object?>? card,
   String? problem,
+  // The user picked this card in the dialog, so the read name must not
+  // be checked again: a name that did not match is why we asked.
+  bool confirmed,
 });
 
 class ScanPage extends StatefulWidget {
@@ -199,7 +202,9 @@ class _ScanPageState extends State<ScanPage> {
     if (hit.name == null && (needsName || count < 2)) {
       if (mounted) {
         setState(
-          () => _status = needsName ? 'Kartenname nicht lesbar' : 'Karte noch kurz still halten',
+          () => _status = needsName
+              ? 'Kartenname nicht lesbar'
+              : 'Karte noch kurz still halten',
         );
       }
       return;
@@ -253,7 +258,9 @@ class _ScanPageState extends State<ScanPage> {
     // One read is enough when the name on the card matches the card we found.
     // Only a misread number could put the wrong card in, and a wrong number
     // almost never belongs to a card with the same name.
-    if ((needsName || count < 2) && !_nameMatches(hit.name!, card)) {
+    if (!found.confirmed &&
+        (needsName || count < 2) &&
+        !_nameMatches(hit.name!, card)) {
       debugPrint(
         'name "${hit.name}" != "${card['name_de'] ?? card['name']}", waiting for a second read',
       );
@@ -306,9 +313,15 @@ class _ScanPageState extends State<ScanPage> {
   /// Scryfall knows the print; the cube knows which card it counts for. A card
   /// scanned for the first time is created here, a new set only after asking.
   Future<_Found?> _lookup(CardHit hit) async {
-    final json = hit.set != null
-        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang)
-        : await _findInCubeSets(hit);
+    var confirmed = false;
+    Map<String, dynamic>? json;
+    if (hit.set != null) {
+      json = await fetchBySetNumber(hit.set!, hit.number, hit.lang);
+    } else {
+      final found = await _findInCubeSets(hit);
+      json = found?.json;
+      confirmed = found?.confirmed ?? false;
+    }
     if (json == null) return null;
     final printId = json['id'] as String;
     final lang = json['lang'] as String;
@@ -320,6 +333,7 @@ class _ScanPageState extends State<ScanPage> {
         lang: lang,
         card: null,
         problem: 'Karte ohne Oracle-ID',
+        confirmed: confirmed,
       );
     }
 
@@ -332,6 +346,7 @@ class _ScanPageState extends State<ScanPage> {
             lang: lang,
             card: null,
             problem: '${json['set_name']} ist nicht im Cube',
+            confirmed: confirmed,
           );
         }
         final set = await fetchSet(setCode);
@@ -350,6 +365,7 @@ class _ScanPageState extends State<ScanPage> {
               lang: lang,
               card: null,
               problem: '${json['set_name']} ist nicht im Cube',
+              confirmed: confirmed,
             );
           }
           parentCode = answer.isEmpty ? null : answer;
@@ -380,12 +396,20 @@ class _ScanPageState extends State<ScanPage> {
         : card['excluded'] == true
         ? 'Karte ist ausgeschlossen'
         : null;
-    return (printId: printId, lang: lang, card: card, problem: problem);
+    return (
+      printId: printId,
+      lang: lang,
+      card: card,
+      problem: problem,
+      confirmed: confirmed,
+    );
   }
 
   /// Retro frame cards print no set code. The number is tried in every set of
   /// the cube and only the card whose name matches the read name is taken.
-  Future<Map<String, dynamic>?> _findInCubeSets(CardHit hit) async {
+  Future<({Map<String, dynamic> json, bool confirmed})?> _findInCubeSets(
+    CardHit hit,
+  ) async {
     final name = hit.name;
     bool matches(Map<String, dynamic> json) =>
         name != null &&
@@ -398,17 +422,19 @@ class _ScanPageState extends State<ScanPage> {
     for (final set in _knownSets) {
       final json = await fetchBySetNumber(set, hit.number, hit.lang);
       if (json == null) continue;
-      if (matches(json)) return json;
+      if (matches(json)) return (json: json, confirmed: false);
       candidates.add(json);
     }
     // The tiny number is easy to misread, so the name alone can find the card.
     if (name != null) {
       for (final json in await searchInSets(name, _knownSets)) {
-        if (matches(json)) return json;
+        if (matches(json)) return (json: json, confirmed: false);
       }
     }
     // Name unreadable or different: let the user pick instead of failing.
-    return candidates.isEmpty ? null : _askWhichCard(candidates);
+    if (candidates.isEmpty) return null;
+    final picked = await _askWhichCard(candidates);
+    return picked == null ? null : (json: picked, confirmed: true);
   }
 
   Future<Map<String, dynamic>?> _askWhichCard(
