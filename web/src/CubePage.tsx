@@ -104,12 +104,15 @@ export default function CubePage({ role }: { role: Role }) {
 
   useEffect(() => {
     let stop = false
-    async function load() {
+    let lastEvent = 0
+
+    async function loadAll() {
       try {
-        const [cards, sets, copyRows] = await Promise.all([
+        const [cards, sets, copyRows, newest] = await Promise.all([
           fetchAll<Card>('cards', 'id'),
           fetchAll<CubeSet>('sets', 'code'),
           fetchAll<Copy>('copies', 'print_id'),
+          supabase.from('card_events').select('id').order('id', { ascending: false }).limit(1).maybeSingle(),
         ])
         if (stop) return
         setCards(cards)
@@ -117,29 +120,56 @@ export default function CubePage({ role }: { role: Role }) {
         setCopies(countCopies(copyRows))
         setPrints(groupPrints(copyRows))
         setError(null)
+        lastEvent = (newest.data?.id as number | undefined) ?? 0
       } catch (e) {
         if (!stop) setError((e as Error).message)
       } finally {
         if (!stop) setLoading(false)
       }
     }
-    load()
-    // Quietly pick up other people's scans. Reloading everything every 15
-    // seconds would move about 2 MB each time, so the check asks for the id of
-    // the newest change and only then loads the cards. A hidden tab is skipped.
-    let lastEvent: number | null = null
-    const timer = setInterval(async () => {
+
+    /* Other people's scans arrive as events. Reloading every card each time
+       would move about 2 MB, so only the cards named in the new events are
+       fetched again. A hidden tab asks for nothing. */
+    async function catchUp() {
       if (document.hidden) return
-      const { data } = await supabase
+      const { data: events } = await supabase
         .from('card_events')
-        .select('id')
-        .order('id', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      const newest = (data?.id as number | undefined) ?? null
-      if (lastEvent !== null && newest !== lastEvent) load()
-      lastEvent = newest
-    }, 15000)
+        .select('id, action, card_id')
+        .gt('id', lastEvent)
+        .order('id')
+      if (stop || !events?.length) return
+      lastEvent = events[events.length - 1].id as number
+
+      // A set came or went: which cards belong to the cube changes, so reload.
+      if (events.some((e) => String(e.action).startsWith('set_'))) return loadAll()
+
+      const ids = [...new Set(events.map((e) => e.card_id).filter((id): id is string => Boolean(id)))]
+      if (!ids.length) return
+      const [changedCards, changedCopies] = await Promise.all([
+        supabase.from('cards').select('*').in('id', ids),
+        supabase.from('copies').select('*').in('card_id', ids),
+      ])
+      if (stop) return
+      const fresh = (changedCards.data ?? []) as Card[]
+      setCards((all) => [...all.filter((c) => !ids.includes(c.id)), ...fresh])
+      const rows = (changedCopies.data ?? []) as Copy[]
+      setCopies((all) => {
+        const next = new Map(all)
+        for (const id of ids) next.delete(id)
+        for (const [id, qty] of countCopies(rows)) next.set(id, qty)
+        return next
+      })
+      setPrints((all) => {
+        const next = new Map(all)
+        for (const id of ids) next.delete(id)
+        for (const [id, list] of groupPrints(rows)) next.set(id, list)
+        return next
+      })
+    }
+
+    loadAll()
+    const timer = setInterval(catchUp, 15000)
     return () => {
       stop = true
       clearInterval(timer)
