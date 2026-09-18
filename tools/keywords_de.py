@@ -74,6 +74,18 @@ def label(en_text, de_text, keyword):
         parts_de = [x.strip().rstrip('.') for x in de.split(',')]
         if len(parts_en) > 1 and len(parts_en) == len(parts_de) and key in parts_en:
             return clean(parts_de[parts_en.index(key)])
+
+    # A keyword action only appears inside a sentence ("behold a Dragon"), but
+    # its reminder names the plain form: "(To behold a Dragon, …)" is
+    # "(Um einen Drachen zu erblicken, …)".
+    en_notes = re.findall(r'\(([^)]*)\)', en_text)
+    de_notes = re.findall(r'\(([^)]*)\)', de_text)
+    if len(en_notes) == len(de_notes):
+        for en_note, de_note in zip(en_notes, de_notes):
+            if re.match(r'to ' + re.escape(key) + r'\b', en_note.strip(), re.I):
+                german = re.search(r'\bzu (\w+)[,.]', de_note)
+                if german:
+                    return clean(german.group(1).capitalize())
     return None
 
 # Labels that came out as the start of an instruction ("Gift a card" ->

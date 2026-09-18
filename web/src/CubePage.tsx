@@ -36,6 +36,7 @@ const KEYWORDS: Record<string, string> = {
   Alliance: 'Allianz',
   Ascend: 'Aufstieg',
   Battalion: 'Bataillon',
+  Behold: 'Erblicken',
   Bloodrush: 'Blutrausch',
   Bloodthirst: 'Blutdurst',
   Changeling: 'Wandelwicht',
@@ -63,6 +64,7 @@ const KEYWORDS: Record<string, string> = {
   Flashback: 'Rückblende',
   Flurry: 'Zaubergestöber',
   Flying: 'Fliegend',
+  Forage: 'Hamstern',
   Forecast: 'Vorhersage',
   Forestcycling: 'Waldumwandlung',
   Forestwalk: 'Waldtarnung',
@@ -87,6 +89,7 @@ const KEYWORDS: Record<string, string> = {
   'Max speed': 'Maximaltempo',
   Menace: 'Bedrohlich',
   Metalcraft: 'Metallkunst',
+  Mill: 'Millen',
   Mobilize: 'Mobilisieren',
   Morbid: 'Morbide',
   Mountaincycling: 'Gebirgsumwandlung',
@@ -392,7 +395,11 @@ export default function CubePage({ role }: { role: Role }) {
         (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
         colorsMatch(c) &&
         (!keyword || c.keywords.includes(keyword)) &&
-        [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
+        // The rules text is searched too, so "Marke" or "Spielstein" find cards.
+        [c.name, c.name_de, c.type_line, c.type_de, c.text_de, c.oracle_text, c.set_code]
+          .join(' ')
+          .toLowerCase()
+          .includes(search),
     )
     const byName = (a: Card, b: Card) => name(a).localeCompare(name(b), 'de')
     const sorters: Record<string, (a: Card, b: Card) => number> = {
@@ -447,7 +454,7 @@ export default function CubePage({ role }: { role: Role }) {
         <input
           id="search"
           type="search"
-          placeholder="Name, Typ oder Set"
+          placeholder="Name, Text, Typ oder Set"
           aria-label="Suche"
           value={text}
           onChange={(e) => setText(e.target.value)}
