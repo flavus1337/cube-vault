@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 
 const name = (c: PrivateCard) => c.name_de || c.name
@@ -12,6 +13,7 @@ export default function MyCardsPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
+  const [notice, setNotice] = useState('')
 
   async function load(quiet = false) {
     try {
@@ -75,6 +77,24 @@ export default function MyCardsPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
+        <button
+          onClick={async () => {
+            await copyToClipboard(wantList(list))
+            setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
+          }}
+        >
+          Liste kopieren
+        </button>
+        <button
+          onClick={() =>
+            refreshPrivatePrices(setNotice)
+              .then(() => load(true))
+              .catch((e) => setNotice(`Fehler: ${e.message}`))
+          }
+        >
+          Preise aktualisieren
+        </button>
+        {notice && <span className="muted">{notice}</span>}
       </div>
       <p className="muted summary">
         {list.length} Karten · {copies} Kopien · {euro(value)}

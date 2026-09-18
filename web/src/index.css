@@ -207,3 +207,34 @@ tr.waiting td { background: #e8a24a14; }
 
 .tile.private .copies { position: absolute; inset: auto 0 0 0; justify-content: center; gap: 8px; padding: 6px; }
 .tile.private .copies button { width: 40px; height: 34px; font-size: 18px; }
+
+.bars { margin: 20px 0; }
+.bars h2 { font-size: 17px; margin: 0 0 8px; }
+.bar-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 3px 0; }
+.bar-track { background: var(--panel); border-radius: 5px; height: 16px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.bar-value { font-variant-numeric: tabular-nums; text-align: right; font-size: 14px; }
+@media (max-width: 560px) {
+  .bar-row { grid-template-columns: 96px minmax(0, 1fr) 76px; gap: 8px; }
+}
+
+.bars { margin: 20px 0; }
+.bars h2 { font-size: 17px; margin: 0 0 8px; }
+.bar-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 3px 0; }
+.bar-track { background: var(--panel); border-radius: 5px; height: 16px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.bar-value { font-variant-numeric: tabular-nums; text-align: right; font-size: 14px; }
+@media (max-width: 560px) {
+  .bar-row { grid-template-columns: 96px minmax(0, 1fr) 76px; gap: 8px; }
+}
+
+.deck-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 12px; }
+.deck-layout h2 { font-size: 17px; margin: 0 0 6px; }
+.deck-layout input[type='search'] { width: 100%; margin-bottom: 8px; }
+.deck-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow: auto; }
+.deck-list li { display: grid; grid-template-columns: auto 44px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+.deck-list button { min-height: 36px; padding: 4px 12px; }
+.deck-qty { font-variant-numeric: tabular-nums; text-align: right; }
+.deck-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.warn { color: var(--warning, #e1ad55); }

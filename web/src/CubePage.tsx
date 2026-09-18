@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
 const RARITY: Record<string, string> = {
@@ -99,6 +100,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [show, setShow] = useState<'owned' | 'missing' | 'all'>('owned')
   const [selected, setSelected] = useState<Card | null>(null)
   const [filterPanel, setFilterPanel] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let stop = false
@@ -355,6 +357,22 @@ export default function CubePage({ role }: { role: Role }) {
           {filtered && <button onClick={resetFilters}>Filter zurücksetzen</button>}
         </div>
       )}
+      <div className="toolbar">
+        <button
+          onClick={async () => {
+            await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
+            setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
+          }}
+        >
+          {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
+        </button>
+        {canEdit(role) && (
+          <button onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}>
+            Preise aktualisieren
+          </button>
+        )}
+        {notice && <span className="muted">{notice}</span>}
+      </div>
       <p className="muted summary">
         {ownedCount} Karten · {copyCount} Kopien · {euro(value)}
       </p>
