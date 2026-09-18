@@ -57,9 +57,11 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     .filter((c) => c.price_eur !== undefined && c.price_eur !== c.old)
     .map((c) => ({ id: c.id, price_eur: c.price_eur! }))
 
-  for (let i = 0; i < changed.length; i += 200) {
-    progress(`Speichern … ${Math.min(i + 200, changed.length)} von ${changed.length}`)
-    const { error } = await supabase.from('cards').upsert(changed.slice(i, i + 200))
+  // One update statement per batch: an upsert would fail on the not-null
+  // columns of the row it pretends to insert.
+  for (let i = 0; i < changed.length; i += 500) {
+    progress(`Speichern … ${Math.min(i + 500, changed.length)} von ${changed.length}`)
+    const { error } = await supabase.rpc('set_prices', { rows: changed.slice(i, i + 500) })
     if (error) throw error
   }
   progress(`Fertig: ${changed.length} von ${cards.length} Karten haben einen neuen Preis.`)
@@ -68,18 +70,16 @@ export async function refreshCubePrices(progress: (text: string) => void) {
 export async function refreshPrivatePrices(progress: (text: string) => void) {
   const cards = await fetchAll<PrivateCard>('private_cards', 'print_id')
   const prices = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
-  let changed = 0
-  for (const card of cards) {
-    const price = prices.get(`${card.set_code}/${card.number}`)
-    if (price === undefined || price === card.price_eur) continue
-    const { error } = await supabase
-      .from('private_cards')
-      .update({ price_eur: price })
-      .eq('print_id', card.print_id)
+  const changed = cards
+    .map((c) => ({ print_id: c.print_id, price_eur: prices.get(`${c.set_code}/${c.number}`), old: c.price_eur }))
+    .filter((c) => c.price_eur !== undefined && c.price_eur !== c.old)
+    .map((c) => ({ print_id: c.print_id, price_eur: c.price_eur! }))
+
+  if (changed.length) {
+    const { error } = await supabase.rpc('set_private_prices', { rows: changed })
     if (error) throw error
-    changed++
   }
-  progress(`Fertig: ${changed} von ${cards.length} Karten haben einen neuen Preis.`)
+  progress(`Fertig: ${changed.length} von ${cards.length} Karten haben einen neuen Preis.`)
 }
 
 /** One line per card, e.g. "2 Lightning Bolt" — the format shops import. */
