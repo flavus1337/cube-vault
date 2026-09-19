@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 
@@ -28,6 +29,7 @@ export default function DecksPage() {
   const [current, setCurrent] = useState('')
   const [text, setText] = useState('')
   const [hand, setHand] = useState<PrivateCard[] | null>(null)
+  const [busyLands, setBusyLands] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -128,6 +130,13 @@ export default function DecksPage() {
     .sort((a, b) => a.card.cmc - b.card.cmc || name(a.card).localeCompare(name(b.card), 'de'))
 
   const total = deckList.reduce((sum, x) => sum + x.row.qty, 0)
+  const spells = deckList
+    .filter((x) => !isLand(x.card))
+    .map((x) => ({ mana_cost: x.card.mana_cost, qty: x.row.qty }))
+  const suggestion = suggestLands(
+    spells.reduce((sum, x) => sum + x.qty, 0),
+    pipsOf(spells),
+  )
   const lands = deckList.filter((x) => isLand(x.card)).reduce((sum, x) => sum + x.row.qty, 0)
   const curve = ['0', '1', '2', '3', '4', '5', '6', '7+'].map((label) => {
     const value = label === '7+' ? 7 : Number(label)
@@ -219,6 +228,31 @@ export default function DecksPage() {
             <p className="muted">
               Kurve: {curve.map(([label, n]) => `${label}: ${n}`).join(' · ')}
             </p>
+            {suggestion.length > 0 && (
+              <p className="muted lands-hint">
+                Empfehlung:{' '}
+                {suggestion
+                  .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
+                  .join(' · ')}
+                <button
+                  className="link-button"
+                  disabled={busyLands}
+                  onClick={async () => {
+                    setBusyLands(true)
+                    try {
+                      await addLands(current, suggestion)
+                      await load()
+                    } catch (e) {
+                      alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
+                    } finally {
+                      setBusyLands(false)
+                    }
+                  }}
+                >
+                  {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
+                </button>
+              </p>
+            )}
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
             <ul className="deck-list">
               {deckList.map(({ row, card }) => {

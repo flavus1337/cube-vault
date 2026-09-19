@@ -318,3 +318,5 @@ tr.waiting td { background: #e8a24a14; }
 
 .hand h3 { font-size: 15px; color: var(--muted); margin: 12px 0 6px; }
 .hand-cards figcaption strong { color: var(--text); }
+
+.lands-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; }
