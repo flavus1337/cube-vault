@@ -8,6 +8,17 @@ type DeckCard = { deck_id: string; print_id: string; qty: number }
 const name = (c: PrivateCard) => c.name_de || c.name
 const isLand = (c: PrivateCard) => /Land/i.test(c.type_de || c.type_line)
 
+/* Ten cards from a shuffled deck, so you can see what an opening looks like.
+   Every copy is its own card in the pile. */
+function drawTen(cards: { row: { qty: number }; card: PrivateCard }[]) {
+  const pile = cards.flatMap(({ row, card }) => Array<PrivateCard>(row.qty).fill(card))
+  for (let i = pile.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pile[i], pile[j]] = [pile[j], pile[i]]
+  }
+  return pile.slice(0, 10)
+}
+
 /* Decks are built from a player's own cards, never from the cube. Everything
    here is private: the database only returns the rows of the player. */
 export default function DecksPage() {
@@ -16,6 +27,7 @@ export default function DecksPage() {
   const [deckCards, setDeckCards] = useState<DeckCard[]>([])
   const [current, setCurrent] = useState('')
   const [text, setText] = useState('')
+  const [hand, setHand] = useState<PrivateCard[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -148,11 +160,37 @@ export default function DecksPage() {
         </button>
         {current && <button onClick={removeDeck}>Deck löschen</button>}
         {current && total > 0 && (
-          <button onClick={() => copyToClipboard(wantList(deckList.map((x) => ({ name: x.card.name, qty: x.row.qty }))))}>
-            Deckliste kopieren
-          </button>
+          <>
+            <button onClick={() => setHand(drawTen(deckList))}>{hand ? 'Neu ziehen' : '10 Karten ziehen'}</button>
+            <button onClick={() => copyToClipboard(wantList(deckList.map((x) => ({ name: x.card.name, qty: x.row.qty }))))}>
+              Deckliste kopieren
+            </button>
+          </>
         )}
       </div>
+
+      {hand && (
+        <section className="hand">
+          <h2>
+            Gezogen: {hand.length} Karten, davon {hand.filter(isLand).length} Länder
+            <button className="link-button" onClick={() => setHand(null)}>
+              schließen
+            </button>
+          </h2>
+          <div className="hand-cards">
+            {hand.map((card, i) => (
+              <figure key={`${card.print_id}-${i}`}>
+                {card.image ? (
+                  <img src={card.image} alt={name(card)} loading="lazy" />
+                ) : (
+                  <div className="noimg">{name(card)}</div>
+                )}
+                <figcaption>{name(card)}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
 
       {!current ? (
         <p className="status">Wähle ein Deck oder lege eines an.</p>

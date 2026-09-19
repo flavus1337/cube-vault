@@ -308,3 +308,10 @@ tr.waiting td { background: #e8a24a14; }
 .deck-qty { font-variant-numeric: tabular-nums; text-align: right; min-width: 3ch; flex: none; }
 .deck-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .warn { color: var(--warning, #e1ad55); }
+
+.hand { margin: 14px 0 4px; }
+.hand h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; margin: 0 0 8px; }
+.hand-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+.hand-cards figure { margin: 0; display: grid; gap: 4px; }
+.hand-cards img { width: 100%; aspect-ratio: 488 / 680; object-fit: cover; border-radius: 4.5% / 3.2%; }
+.hand-cards figcaption { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
