@@ -172,13 +172,14 @@ export default function DecksPage() {
       {hand && (
         <section className="hand">
           <h2>
-            Gezogen: {hand.length} Karten, davon {hand.filter(isLand).length} Länder
+            Starthand und drei Züge · {hand.filter(isLand).length} Länder unter {hand.length} Karten
             <button className="link-button" onClick={() => setHand(null)}>
               schließen
             </button>
           </h2>
+          <h3>Starthand</h3>
           <div className="hand-cards">
-            {hand.map((card, i) => (
+            {hand.slice(0, 7).map((card, i) => (
               <figure key={`${card.print_id}-${i}`}>
                 {card.image ? (
                   <img src={card.image} alt={name(card)} loading="lazy" />
@@ -186,6 +187,21 @@ export default function DecksPage() {
                   <div className="noimg">{name(card)}</div>
                 )}
                 <figcaption>{name(card)}</figcaption>
+              </figure>
+            ))}
+          </div>
+          <h3>Nachgezogen</h3>
+          <div className="hand-cards">
+            {hand.slice(7).map((card, i) => (
+              <figure key={`${card.print_id}-draw-${i}`}>
+                {card.image ? (
+                  <img src={card.image} alt={name(card)} loading="lazy" />
+                ) : (
+                  <div className="noimg">{name(card)}</div>
+                )}
+                <figcaption>
+                  <strong>Zug {i + 1}</strong> · {name(card)}
+                </figcaption>
               </figure>
             ))}
           </div>
@@ -220,7 +236,8 @@ export default function DecksPage() {
                       {tooMany && (
                         <span className="warn">
                           {' '}
-                          · du hast {card.qty}, in Decks {row.qty + elsewhere}
+                          · du besitzt {card.qty}
+                          {elsewhere > 0 && `, ${elsewhere} in anderen Decks`}
                         </span>
                       )}
                     </span>

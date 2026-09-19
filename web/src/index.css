@@ -315,3 +315,6 @@ tr.waiting td { background: #e8a24a14; }
 .hand-cards figure { margin: 0; display: grid; gap: 4px; }
 .hand-cards img { width: 100%; aspect-ratio: 488 / 680; object-fit: cover; border-radius: 4.5% / 3.2%; }
 .hand-cards figcaption { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hand h3 { font-size: 15px; color: var(--muted); margin: 12px 0 6px; }
+.hand-cards figcaption strong { color: var(--text); }
