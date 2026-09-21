@@ -326,3 +326,6 @@ tr.waiting td { background: #e8a24a14; }
 .search-help p { margin: 0 0 6px; }
 .search-help ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
 .search-help code { color: var(--text); background: var(--panel-raised); padding: 1px 5px; border-radius: 5px; }
+
+.deck-layout h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.deck-layout h2 select { font-size: 14px; }

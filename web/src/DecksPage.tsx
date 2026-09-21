@@ -1,18 +1,44 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
-import { fetchAll, supabase, type PrivateCard } from './supabase'
+import { fetchAll, supabase, type Card, type Copy, type CubeSet, type PrivateCard } from './supabase'
 
 type Deck = { id: string; name: string; created_at: string }
 type DeckCard = { deck_id: string; print_id: string; qty: number }
 
-const name = (c: PrivateCard) => c.name_de || c.name
-const isLand = (c: PrivateCard) => /Land/i.test(c.type_de || c.type_line)
+/* A card a deck can hold, from the player's own cards or from the cube. `key`
+   is what deck_cards stores: the scanned print for own cards, the card id for
+   cube cards. */
+type PoolCard = {
+  key: string
+  name: string
+  name_de: string | null
+  type_line: string
+  type_de: string | null
+  mana_cost: string
+  cmc: number
+  image: string | null
+  set_code: string
+  number: string
+  owned: number
+  source: 'mine' | 'cube'
+}
+
+const name = (c: PoolCard) => c.name_de || c.name
+const isLand = (c: PoolCard) => /Land/i.test(c.type_de || c.type_line)
+
+function fromPrivate(card: PrivateCard): PoolCard {
+  return { ...card, key: card.print_id, owned: card.qty, source: 'mine' }
+}
+
+function fromCube(card: Card, copies: number): PoolCard {
+  return { ...card, key: card.id, owned: copies, source: 'cube' }
+}
 
 /* Ten cards from a shuffled deck, so you can see what an opening looks like.
    Every copy is its own card in the pile. */
-function drawTen(cards: { row: { qty: number }; card: PrivateCard }[]) {
-  const pile = cards.flatMap(({ row, card }) => Array<PrivateCard>(row.qty).fill(card))
+function drawTen(cards: { row: DeckCard; card: PoolCard }[]) {
+  const pile = cards.flatMap(({ row, card }) => Array<PoolCard>(row.qty).fill(card))
   for (let i = pile.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[pile[i], pile[j]] = [pile[j], pile[i]]
@@ -20,52 +46,48 @@ function drawTen(cards: { row: { qty: number }; card: PrivateCard }[]) {
   return pile.slice(0, 10)
 }
 
-/* Decks are built from a player's own cards, never from the cube. Everything
-   here is private: the database only returns the rows of the player. */
+/* Decks are private: only their owner sees them. The cards in them can come
+   from the player's own collection or from the shared cube. */
 export default function DecksPage() {
-  const [cards, setCards] = useState<PrivateCard[]>([])
+  const [mine, setMine] = useState<PoolCard[]>([])
+  const [cube, setCube] = useState<PoolCard[]>([])
   const [decks, setDecks] = useState<Deck[]>([])
   const [deckCards, setDeckCards] = useState<DeckCard[]>([])
   const [current, setCurrent] = useState('')
+  const [source, setSource] = useState<'mine' | 'cube'>('mine')
   const [text, setText] = useState('')
-  const [hand, setHand] = useState<PrivateCard[] | null>(null)
+  const [hand, setHand] = useState<PoolCard[] | null>(null)
   const [busyLands, setBusyLands] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   async function load() {
-    try {
-      const [cards, decks, deckCards] = await Promise.all([
-        fetchAll<PrivateCard>('private_cards', 'print_id'),
-        fetchAll<Deck>('decks', 'created_at'),
-        fetchAll<DeckCard>('deck_cards', 'deck_id'),
-      ])
-      setCards(cards)
-      setDecks(decks)
-      setDeckCards(deckCards)
-      setCurrent((id) => id || decks[0]?.id || '')
-      setError(null)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
+    const [privateCards, cards, sets, copies, decks, deckCards] = await Promise.all([
+      fetchAll<PrivateCard>('private_cards', 'print_id'),
+      fetchAll<Card>('cards', 'id'),
+      fetchAll<CubeSet>('sets', 'code'),
+      fetchAll<Copy>('copies', 'print_id'),
+      fetchAll<Deck>('decks', 'created_at'),
+      fetchAll<DeckCard>('deck_cards', 'deck_id'),
+    ])
+    const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
+    const owned = new Map<string, number>()
+    for (const copy of copies) owned.set(copy.card_id, (owned.get(copy.card_id) ?? 0) + copy.qty)
+
+    setMine(privateCards.map(fromPrivate))
+    setCube(
+      cards
+        .filter((c) => inCube.has(c.set_code) && !c.excluded && owned.has(c.id))
+        .map((c) => fromCube(c, owned.get(c.id) ?? 0)),
+    )
+    setDecks(decks)
+    setDeckCards(deckCards)
+    setCurrent((id) => id || decks[0]?.id || '')
   }
 
   useEffect(() => {
     let stop = false
-    Promise.all([
-      fetchAll<PrivateCard>('private_cards', 'print_id'),
-      fetchAll<Deck>('decks', 'created_at'),
-      fetchAll<DeckCard>('deck_cards', 'deck_id'),
-    ])
-      .then(([cards, decks, deckCards]) => {
-        if (stop) return
-        setCards(cards)
-        setDecks(decks)
-        setDeckCards(deckCards)
-        setCurrent((id) => id || decks[0]?.id || '')
-      })
+    load()
       .catch((e) => {
         if (!stop) setError((e as Error).message)
       })
@@ -77,21 +99,23 @@ export default function DecksPage() {
     }
   }, [])
 
-  const byPrint = useMemo(() => new Map(cards.map((c) => [c.print_id, c])), [cards])
-  const inDeck = useMemo(
-    () => deckCards.filter((d) => d.deck_id === current),
-    [deckCards, current],
+  const byKey = useMemo(
+    () => new Map([...mine, ...cube].map((card) => [card.key, card])),
+    [mine, cube],
   )
+  const inDeck = useMemo(() => deckCards.filter((d) => d.deck_id === current), [deckCards, current])
   // How many copies of a card sit in other decks, to warn about double use.
-  const usedElsewhere = (printId: string) =>
-    deckCards.filter((d) => d.print_id === printId && d.deck_id !== current).reduce((s, d) => s + d.qty, 0)
+  const usedElsewhere = (key: string) =>
+    deckCards.filter((d) => d.print_id === key && d.deck_id !== current).reduce((s, d) => s + d.qty, 0)
 
   const pool = useMemo(() => {
     const search = text.trim().toLowerCase()
-    return cards
-      .filter((c) => [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search))
+    return (source === 'mine' ? mine : cube)
+      .filter((c) =>
+        [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
+      )
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
-  }, [cards, text])
+  }, [mine, cube, source, text])
 
   async function newDeck() {
     const deckName = prompt('Name des Decks?')
@@ -111,22 +135,22 @@ export default function DecksPage() {
     void load()
   }
 
-  async function change(printId: string, delta: number) {
+  async function change(key: string, delta: number) {
     if (!current) return
-    const row = inDeck.find((d) => d.print_id === printId)
+    const row = inDeck.find((d) => d.print_id === key)
     const qty = (row?.qty ?? 0) + delta
     const query =
       qty <= 0
-        ? supabase.from('deck_cards').delete().eq('deck_id', current).eq('print_id', printId)
-        : supabase.from('deck_cards').upsert({ deck_id: current, print_id: printId, qty })
+        ? supabase.from('deck_cards').delete().eq('deck_id', current).eq('print_id', key)
+        : supabase.from('deck_cards').upsert({ deck_id: current, print_id: key, qty })
     const { error } = await query
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
     void load()
   }
 
   const deckList = inDeck
-    .map((d) => ({ row: d, card: byPrint.get(d.print_id) }))
-    .filter((x): x is { row: DeckCard; card: PrivateCard } => Boolean(x.card))
+    .map((d) => ({ row: d, card: byKey.get(d.print_id) }))
+    .filter((x): x is { row: DeckCard; card: PoolCard } => Boolean(x.card))
     .sort((a, b) => a.card.cmc - b.card.cmc || name(a.card).localeCompare(name(b.card), 'de'))
 
   const total = deckList.reduce((sum, x) => sum + x.row.qty, 0)
@@ -148,13 +172,25 @@ export default function DecksPage() {
     ] as [string, number]
   })
 
-  if (error) return <main className="page"><p className="status">Laden fehlgeschlagen: {error}</p></main>
-  if (loading) return <main className="page"><p className="status">Lädt …</p></main>
+  if (error)
+    return (
+      <main className="page">
+        <p className="status">Laden fehlgeschlagen: {error}</p>
+      </main>
+    )
+  if (loading)
+    return (
+      <main className="page">
+        <p className="status">Lädt …</p>
+      </main>
+    )
 
   return (
     <main className="page">
       <h1 className="cube-title">Decks</h1>
-      <p className="muted">Gebaut aus deinen eigenen Karten. Nur du siehst sie.</p>
+      <p className="muted">
+        Bau aus deinen eigenen Karten oder aus dem Cube. Deine Decks sieht nur du.
+      </p>
       <div className="toolbar">
         <select id="deck" aria-label="Deck" value={current} onChange={(e) => setCurrent(e.target.value)}>
           <option value="">Kein Deck gewählt</option>
@@ -170,8 +206,14 @@ export default function DecksPage() {
         {current && <button onClick={removeDeck}>Deck löschen</button>}
         {current && total > 0 && (
           <>
-            <button onClick={() => setHand(drawTen(deckList))}>{hand ? 'Neu ziehen' : '10 Karten ziehen'}</button>
-            <button onClick={() => copyToClipboard(wantList(deckList.map((x) => ({ name: x.card.name, qty: x.row.qty }))))}>
+            <button onClick={() => setHand(drawTen(deckList))}>
+              {hand ? 'Neu ziehen' : '10 Karten ziehen'}
+            </button>
+            <button
+              onClick={() =>
+                copyToClipboard(wantList(deckList.map((x) => ({ name: x.card.name, qty: x.row.qty }))))
+              }
+            >
               Deckliste kopieren
             </button>
           </>
@@ -189,7 +231,7 @@ export default function DecksPage() {
           <h3>Starthand</h3>
           <div className="hand-cards">
             {hand.slice(0, 7).map((card, i) => (
-              <figure key={`${card.print_id}-${i}`}>
+              <figure key={`${card.key}-${i}`}>
                 {card.image ? (
                   <img src={card.image} alt={name(card)} loading="lazy" />
                 ) : (
@@ -202,7 +244,7 @@ export default function DecksPage() {
           <h3>Nachgezogen</h3>
           <div className="hand-cards">
             {hand.slice(7).map((card, i) => (
-              <figure key={`${card.print_id}-draw-${i}`}>
+              <figure key={`${card.key}-draw-${i}`}>
                 {card.image ? (
                   <img src={card.image} alt={name(card)} loading="lazy" />
                 ) : (
@@ -225,9 +267,7 @@ export default function DecksPage() {
             <h2>
               Deck · {total} Karten, davon {lands} Länder
             </h2>
-            <p className="muted">
-              Kurve: {curve.map(([label, n]) => `${label}: ${n}`).join(' · ')}
-            </p>
+            <p className="muted">Kurve: {curve.map(([label, n]) => `${label}: ${n}`).join(' · ')}</p>
             {suggestion.length > 0 && (
               <p className="muted lands-hint">
                 Empfehlung:{' '}
@@ -256,26 +296,29 @@ export default function DecksPage() {
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
             <ul className="deck-list">
               {deckList.map(({ row, card }) => {
-                const elsewhere = usedElsewhere(card.print_id)
-                const tooMany = row.qty + elsewhere > card.qty
+                const elsewhere = usedElsewhere(card.key)
+                const tooMany = row.qty + elsewhere > card.owned
                 return (
-                  <li key={card.print_id}>
-                    <button aria-label={`Eine ${name(card)} weniger`} onClick={() => change(card.print_id, -1)}>
+                  <li key={card.key}>
+                    <button aria-label={`Eine ${name(card)} weniger`} onClick={() => change(card.key, -1)}>
                       −
                     </button>
                     <span className="deck-qty">{row.qty}×</span>
                     <span className="deck-name">
                       {name(card)}
-                      <span className="muted"> · {card.cmc} Mana</span>
+                      <span className="muted">
+                        {' '}
+                        · {card.cmc} Mana · {card.source === 'cube' ? 'Cube' : 'eigene'}
+                      </span>
                       {tooMany && (
                         <span className="warn">
                           {' '}
-                          · du besitzt {card.qty}
+                          · vorhanden {card.owned}
                           {elsewhere > 0 && `, ${elsewhere} in anderen Decks`}
                         </span>
                       )}
                     </span>
-                    <button aria-label={`Eine ${name(card)} mehr`} onClick={() => change(card.print_id, 1)}>
+                    <button aria-label={`Eine ${name(card)} mehr`} onClick={() => change(card.key, 1)}>
                       +
                     </button>
                   </li>
@@ -285,7 +328,18 @@ export default function DecksPage() {
           </section>
 
           <section>
-            <h2>Meine Karten</h2>
+            <h2>
+              Kartenpool
+              <select
+                id="deck-source"
+                aria-label="Kartenpool"
+                value={source}
+                onChange={(e) => setSource(e.target.value as typeof source)}
+              >
+                <option value="mine">Meine Karten</option>
+                <option value="cube">Cube</option>
+              </select>
+            </h2>
             <input
               id="deck-search"
               type="search"
@@ -296,13 +350,16 @@ export default function DecksPage() {
             />
             <ul className="deck-list">
               {pool.map((card) => (
-                <li key={card.print_id}>
-                  <span className="deck-qty">{card.qty}×</span>
+                <li key={card.key}>
+                  <span className="deck-qty">{card.owned}×</span>
                   <span className="deck-name">
                     {name(card)}
-                    <span className="muted"> · {card.set_code.toUpperCase()} #{card.number}</span>
+                    <span className="muted">
+                      {' '}
+                      · {card.set_code.toUpperCase()} #{card.number}
+                    </span>
                   </span>
-                  <button aria-label={`${name(card)} ins Deck`} onClick={() => change(card.print_id, 1)}>
+                  <button aria-label={`${name(card)} ins Deck`} onClick={() => change(card.key, 1)}>
                     +
                   </button>
                 </li>
