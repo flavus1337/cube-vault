@@ -372,17 +372,24 @@ tr.waiting td { background: #e8a24a14; }
 .deck-layout h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .deck-layout h2 select { font-size: 14px; }
 
-.builder { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 20px; margin-top: 12px; align-items: start; }
+/* The deck fills the page, the cards you can add sit in a column beside it. */
+.builder { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); gap: 20px; margin-top: 12px; align-items: start; }
 .builder > * { min-width: 0; }
-.deck-side { position: sticky; top: 74px; max-height: calc(100dvh - 90px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
-.deck-side h2 { font-size: 17px; margin: 0 0 4px; }
-.deck-group h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
+.deck-head { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr); gap: 16px; align-items: end; margin-bottom: 8px; }
+.deck-columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); gap: 14px; align-items: start; margin-top: 6px; }
+.deck-column h3 { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 0 0 2px;
+  letter-spacing: .03em; text-transform: uppercase; }
+.deck-column h3 .muted { color: var(--text); font-weight: 700; }
+.pool { position: sticky; top: 74px; max-height: calc(100dvh - 90px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+.pool .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pool .badge { font-size: 11px; padding: 1px 6px; top: 6px; right: 6px; }
+.pool .badge.out { bottom: 6px; left: 6px; }
 /* The deck as a stack of cards: each one shows its name strip, the card under
    the pointer comes to the front. */
-.deck-stack { display: flex; flex-direction: column; margin: 6px 0 10px; }
+.deck-stack { display: flex; flex-direction: column; margin: 4px 0 8px; }
 .stack-card {
   position: relative; display: block; width: 100%; padding: 0; border: 0; background: none;
-  border-radius: 4.2% / 2.9%; cursor: pointer; margin-bottom: calc(62px - 139.3%);
+  border-radius: 4.2% / 2.9%; cursor: pointer; margin-bottom: calc(46px - 139.3%);
   transition: transform .12s ease;
 }
 .stack-card:last-child { margin-bottom: 0; }
@@ -410,7 +417,8 @@ tr.waiting td { background: #e8a24a14; }
 .pool .toolbar { margin-bottom: 8px; }
 @media (max-width: 860px) {
   .builder { grid-template-columns: minmax(0, 1fr); }
-  .deck-side { position: static; max-height: none; }
+  .deck-head { grid-template-columns: minmax(0, 1fr); }
+  .pool { position: static; max-height: none; }
 }
 
 .curve { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; height: 96px; margin: 8px 0 4px; }

@@ -27,6 +27,35 @@ const GROUPS: [string, string][] = [
   ['L', 'Länder'],
 ]
 
+/* How the deck can be split into columns, the way Archidekt does it. */
+const TYPE_ORDER: [string, RegExp][] = [
+  ['Kreaturen', /Kreatur|Creature/i],
+  ['Planeswalker', /Planeswalker/i],
+  ['Spontanzauber', /Spontanzauber|Instant/i],
+  ['Hexereien', /Hexerei|Sorcery/i],
+  ['Länder', /Land/i],
+  ['Artefakte', /Artefakt|Artifact/i],
+  ['Verzauberungen', /Verzauberung|Enchantment/i],
+]
+const RARITY_ORDER: [string, string][] = [
+  ['common', 'Gewöhnlich'],
+  ['uncommon', 'Ungewöhnlich'],
+  ['rare', 'Selten'],
+  ['mythic', 'Mythisch selten'],
+]
+const GROUP_BY: Record<string, string> = {
+  type: 'Typ',
+  color: 'Farbe',
+  cmc: 'Manabetrag',
+  rarity: 'Seltenheit',
+}
+const SORT_BY: Record<string, string> = {
+  name: 'Name',
+  cmc: 'Manabetrag',
+  price: 'Preis',
+  qty: 'Anzahl',
+}
+
 const name = (c: PoolCard) => c.name_de || c.name
 const isLand = (c: PoolCard) => /Land/i.test(c.type_de || c.type_line)
 
@@ -34,6 +63,40 @@ function groupOf(card: PoolCard) {
   if (isLand(card)) return 'L'
   if (!card.colors) return 'C'
   return card.colors.length > 1 ? 'M' : card.colors
+}
+
+const typeOf = (card: PoolCard) =>
+  TYPE_ORDER.find(([, words]) => words.test(card.type_de || card.type_line))?.[0] ?? 'Sonstiges'
+
+/** The columns of the deck view: a label, the cards in it, and a colour dot. */
+function columnsOf(rows: { row: DeckCard; card: PoolCard }[], by: string) {
+  const buckets = new Map<string, { row: DeckCard; card: PoolCard }[]>()
+  const key = (card: PoolCard) => {
+    if (by === 'color') return GROUPS.find(([g]) => g === groupOf(card))![1]
+    if (by === 'cmc') return card.cmc >= 7 ? '7+ Mana' : `${card.cmc} Mana`
+    if (by === 'rarity') return RARITY_ORDER.find(([r]) => r === card.rarity)?.[1] ?? 'Sonstiges'
+    return typeOf(card)
+  }
+  for (const entry of rows) {
+    const label = key(entry.card)
+    buckets.set(label, [...(buckets.get(label) ?? []), entry])
+  }
+  const order =
+    by === 'color'
+      ? GROUPS.map(([, label]) => label)
+      : by === 'cmc'
+        ? ['0 Mana', '1 Mana', '2 Mana', '3 Mana', '4 Mana', '5 Mana', '6 Mana', '7+ Mana']
+        : by === 'rarity'
+          ? RARITY_ORDER.map(([, label]) => label)
+          : [...TYPE_ORDER.map(([label]) => label), 'Sonstiges']
+  const rest = [...buckets.keys()].filter((label) => !order.includes(label))
+  return [...order, ...rest]
+    .filter((label) => buckets.has(label))
+    .map((label) => ({
+      label,
+      dot: by === 'color' ? GROUPS.find(([, l]) => l === label)?.[0] : null,
+      rows: buckets.get(label)!,
+    }))
 }
 
 function fromPrivate(card: PrivateCard): PoolCard {
@@ -85,6 +148,10 @@ export default function DecksPage() {
   const [hand, setHand] = useState<PoolCard[] | null>(null)
   // The card shown in the detail view, held by key so its numbers stay fresh.
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // How the deck itself is shown: columns, order inside them, and a search.
+  const [groupBy, setGroupBy] = useState('type')
+  const [deckSort, setDeckSort] = useState('cmc')
+  const [deckText, setDeckText] = useState('')
   const [busyLands, setBusyLands] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -190,6 +257,22 @@ export default function DecksPage() {
     .filter((x): x is { row: DeckCard; card: PoolCard } => Boolean(x.card))
     .sort((a, b) => a.card.cmc - b.card.cmc || name(a.card).localeCompare(name(b.card), 'de'))
 
+  /* What the columns show: the same search language as everywhere else, and
+     the order you picked. The numbers above stay about the whole deck. */
+  const shownInDeck = (() => {
+    const matches = parseQuery(deckText).test
+    const byName = (a: PoolCard, b: PoolCard) => name(a).localeCompare(name(b), 'de')
+    const sorters: Record<string, (a: (typeof deckList)[number], b: (typeof deckList)[number]) => number> = {
+      name: (a, b) => byName(a.card, b.card),
+      cmc: (a, b) => a.card.cmc - b.card.cmc || byName(a.card, b.card),
+      price: (a, b) => (b.card.price_eur ?? -1) - (a.card.price_eur ?? -1),
+      qty: (a, b) => b.row.qty - a.row.qty || byName(a.card, b.card),
+    }
+    return deckList.filter((x) => matches({ card: x.card, copies: x.card.owned })).sort(sorters[deckSort])
+  })()
+
+  const columns = columnsOf(shownInDeck, groupBy)
+
   const selected = selectedKey ? (byKey.get(selectedKey) ?? null) : null
   const selectedQty = inDeck.find((row) => row.print_id === selectedKey)?.qty ?? 0
 
@@ -221,6 +304,7 @@ export default function DecksPage() {
     card: x.card,
     n: Math.max(0, x.row.qty + usedElsewhere(x.card.key) - x.card.owned),
   }))
+  const deckValue = deckList.reduce((sum, x) => sum + (x.card.price_eur ?? 0) * x.row.qty, 0)
   const shortCards = short.reduce((sum, x) => sum + x.n, 0)
   const shortValue = short.reduce((sum, x) => sum + x.n * (x.card.price_eur ?? 0), 0)
   const curve = ['0', '1', '2', '3', '4', '5', '6', '7+'].map((label) => {
@@ -324,7 +408,7 @@ export default function DecksPage() {
         <p className="status">Wähle ein Deck oder lege eines an.</p>
       ) : (
         <div className="builder">
-          <section className="deck-side">
+          <section className="deck-main">
             <dl className="deck-stats">
               <div>
                 <dt>Karten</dt>
@@ -338,6 +422,10 @@ export default function DecksPage() {
                 <dt>Zauber</dt>
                 <dd>{total - lands}</dd>
               </div>
+              <div>
+                <dt>Wert</dt>
+                <dd>{euro(deckValue)}</dd>
+              </div>
               {shortCards > 0 && (
                 <div className="warn">
                   <dt>Fehlen</dt>
@@ -347,70 +435,121 @@ export default function DecksPage() {
                 </div>
               )}
             </dl>
-            <h3 className="side-title">
-              Manakurve <span className="muted">Karten je Manabetrag, ohne Länder</span>
-            </h3>
-            <div
-              className="curve"
-              role="img"
-              aria-label={`Manakurve: ${curve.map(([label, n]) => `${n} Karten mit ${label} Mana`).join(', ')}`}
-            >
-              {curve.map(([label, n]) => (
-                <span key={label} className="curve-col">
-                  <span className="curve-value">{n || ''}</span>
-                  <span
-                    className="curve-bar"
-                    style={{ height: `${Math.max(...curve.map(([, m]) => m), 1) ? (n / Math.max(...curve.map(([, m]) => m), 1)) * 100 : 0}%` }}
-                  />
-                  <span className="curve-label">{label}</span>
-                </span>
-              ))}
-            </div>
-            {suggestion.length > 0 && (
-              <div className="lands-hint">
-                <p>
-                  <strong>
-                    {suggestion
-                      .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
-                      .join(' · ')}
-                  </strong>
-                  <span className="muted">
-                    Standardländer, passend zu den Farben deiner {total - lands} Zauber
-                  </span>
-                </p>
-                {lands >= landsWanted || !wantedLands.length ? (
-                  <p className="muted">Deine {lands} Länder reichen.</p>
-                ) : (
-                  <button
-                    className="primary"
-                    disabled={busyLands}
-                    onClick={async () => {
-                      setBusyLands(true)
-                      try {
-                        await addLands(current, wantedLands)
-                        await Promise.all([loadPools(), loadDecks()])
-                      } catch (e) {
-                        alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
-                      } finally {
-                        setBusyLands(false)
-                      }
-                    }}
-                  >
-                    {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
-                  </button>
-                )}
+
+            <div className="deck-head">
+              <div>
+                <h3 className="side-title">
+                  Manakurve <span className="muted">Karten je Manabetrag, ohne Länder</span>
+                </h3>
+                <div
+                  className="curve"
+                  role="img"
+                  aria-label={`Manakurve: ${curve.map(([label, n]) => `${n} Karten mit ${label} Mana`).join(', ')}`}
+                >
+                  {curve.map(([label, n]) => (
+                    <span key={label} className="curve-col">
+                      <span className="curve-value">{n || ''}</span>
+                      <span
+                        className="curve-bar"
+                        style={{ height: `${Math.max(...curve.map(([, m]) => m), 1) ? (n / Math.max(...curve.map(([, m]) => m), 1)) * 100 : 0}%` }}
+                      />
+                      <span className="curve-label">{label}</span>
+                    </span>
+                  ))}
+                </div>
               </div>
+              {suggestion.length > 0 && (
+                <div className="lands-hint">
+                  <p>
+                    <strong>
+                      {suggestion
+                        .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
+                        .join(' · ')}
+                    </strong>
+                    <span className="muted">
+                      Standardländer, passend zu den Farben deiner {total - lands} Zauber
+                    </span>
+                  </p>
+                  {lands >= landsWanted || !wantedLands.length ? (
+                    <p className="muted">Deine {lands} Länder reichen.</p>
+                  ) : (
+                    <button
+                      className="primary"
+                      disabled={busyLands}
+                      onClick={async () => {
+                        setBusyLands(true)
+                        try {
+                          await addLands(current, wantedLands)
+                          await Promise.all([loadPools(), loadDecks()])
+                        } catch (e) {
+                          alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
+                        } finally {
+                          setBusyLands(false)
+                        }
+                      }}
+                    >
+                      {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="toolbar">
+              <input
+                id="deck-filter"
+                type="search"
+                placeholder="Im Deck suchen, z. B. t:kreatur mv<=3"
+                aria-label="Im Deck suchen"
+                value={deckText}
+                onChange={(e) => setDeckText(e.target.value)}
+              />
+              <select
+                id="deck-group"
+                aria-label="Spalten nach"
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value)}
+              >
+                {Object.entries(GROUP_BY).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    Spalten: {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                id="deck-sort"
+                aria-label="Sortieren nach"
+                value={deckSort}
+                onChange={(e) => setDeckSort(e.target.value)}
+              >
+                {Object.entries(SORT_BY).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    Sortieren: {label}
+                  </option>
+                ))}
+              </select>
+              {deckText && (
+                <button className="link-button" onClick={() => setDeckText('')}>
+                  Suche zurücksetzen
+                </button>
+              )}
+            </div>
+            {deckText && (
+              <p className="muted summary">
+                {shownInDeck.reduce((sum, x) => sum + x.row.qty, 0)} von {total} Karten
+              </p>
             )}
+
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
-            {GROUPS.map(([key, label]) => {
-              const rows = deckList.filter(({ card }) => groupOf(card) === key)
-              if (!rows.length) return null
-              const count = rows.reduce((sum, x) => sum + x.row.qty, 0)
-              return (
-                <div key={key} className="deck-group">
+            {deckList.length > 0 && !shownInDeck.length && (
+              <p className="status">Keine Karte im Deck passt zur Suche.</p>
+            )}
+            <div className="deck-columns">
+              {columns.map(({ label, dot, rows }) => (
+                <section key={label} className="deck-column">
                   <h3>
-                    <span className={`dot dot-${key}`} aria-hidden="true" />
-                    {label} · {count}
+                    {dot && <span className={`dot dot-${dot}`} aria-hidden="true" />}
+                    {label} <span className="muted">{rows.reduce((sum, x) => sum + x.row.qty, 0)}</span>
                   </h3>
                   <div className="deck-stack">
                     {rows.map(({ row, card }) => {
@@ -435,12 +574,13 @@ export default function DecksPage() {
                       )
                     })}
                   </div>
-                </div>
-              )
-            })}
+                </section>
+              ))}
+            </div>
           </section>
 
           <section className="pool">
+            <h3 className="side-title">Karten hinzufügen</h3>
             <div className="toolbar">
               <input
                 id="deck-search"
