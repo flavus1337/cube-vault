@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { euro, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { loadTags, type CardTag } from './tags'
@@ -188,8 +189,6 @@ const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
 // Sharpest Scryfall image (745×1040 PNG), only for the detail view.
 const png = (url: string) => url.replace('/normal/', '/png/').replace('.jpg', '.png')
-const euro = (n: number | null) =>
-  n == null ? '–' : n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 
 export default function CubePage({ role }: { role: Role }) {
   const [cards, setCards] = useState<Card[]>([])
@@ -404,7 +403,7 @@ export default function CubePage({ role }: { role: Role }) {
     closeFilters()
   }
 
-  const list = useMemo(() => {
+  const matched = useMemo(() => {
     const colorsMatch = (c: Card) => {
       if (!colors.size) return true
       const have = c.colors.split('').filter(Boolean)
@@ -424,7 +423,6 @@ export default function CubePage({ role }: { role: Role }) {
         inCube.has(c.set_code) &&
         (!setCodes.length || setCodes.includes(c.set_code)) &&
         (showExcluded || !c.excluded) &&
-        (show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))) &&
         (!rarities.length || rarities.includes(c.rarity)) &&
         (!cmcs.length || cmcs.some((v) => (v === '7' ? c.cmc >= 7 : c.cmc === Number(v)))) &&
         (!cardTypes.length ||
@@ -442,15 +440,24 @@ export default function CubePage({ role }: { role: Role }) {
         a.set_code.localeCompare(b.set_code) || parseInt(a.number, 10) - parseInt(b.number, 10),
     }
     return result.sort(sorters[sort])
-  }, [cards, sets, copies, tags, text, colors, exactColors, rarities, cardTypes, cmcs, keywordList, setCodes, sort, showExcluded, show])
+  }, [cards, sets, copies, tags, text, colors, exactColors, rarities, cardTypes, cmcs, keywordList, setCodes, sort, showExcluded])
 
-  const ownedCount = list.filter((c) => copies.get(c.id)).length
-  const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
-  // Cardmarket price of the English print, times the copies you own.
-  const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * (copies.get(c.id) ?? 0), 0)
-  // In the missing view every card counts once: what one copy each would cost.
-  const missing = list.filter((c) => !copies.get(c.id))
-  const missingValue = missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0)
+  // The grid shows one of the three views, the summary always the whole filter.
+  const list = matched.filter(
+    (c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)),
+  )
+  const owned = matched.filter((c) => copies.get(c.id))
+  const missing = matched.filter((c) => !copies.get(c.id))
+  const line = summary(
+    {
+      cards: owned.length,
+      copies: matched.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0),
+      // Cardmarket price of the English print, times the copies you own.
+      value: matched.reduce((sum, c) => sum + (c.price_eur ?? 0) * (copies.get(c.id) ?? 0), 0),
+    },
+    // Every missing card counts once: what one copy each would cost.
+    { cards: missing.length, value: missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
+  )
 
   // Editors change the number of scanned copies right here.
   async function changeCopies(card: Card, delta: number) {
@@ -605,9 +612,7 @@ export default function CubePage({ role }: { role: Role }) {
         />
       )}
       <p className="muted summary">
-        {show === 'missing'
-          ? `${missing.length} fehlende Karten · ${euro(missingValue)}`
-          : `${ownedCount} Karten · ${copyCount} Kopien · ${euro(value)}`}
+        {line}
       </p>
 
       {error ? (

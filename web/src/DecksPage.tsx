@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { euro } from './format'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
 import { parseQuery } from './query'
@@ -198,6 +199,14 @@ export default function DecksPage() {
     pipsOf(spells),
   )
   const lands = deckList.filter((x) => isLand(x.card)).reduce((sum, x) => sum + x.row.qty, 0)
+  /* Copies the deck wants but nobody has: what you own minus what the other
+     decks already hold. Buying them costs the price of the English print. */
+  const short = deckList.map((x) => ({
+    card: x.card,
+    n: Math.max(0, x.row.qty + usedElsewhere(x.card.key) - x.card.owned),
+  }))
+  const shortCards = short.reduce((sum, x) => sum + x.n, 0)
+  const shortValue = short.reduce((sum, x) => sum + x.n * (x.card.price_eur ?? 0), 0)
   const curve = ['0', '1', '2', '3', '4', '5', '6', '7+'].map((label) => {
     const value = label === '7+' ? 7 : Number(label)
     return [
@@ -302,6 +311,12 @@ export default function DecksPage() {
           <section className="deck-side">
             <h2>
               Deck · {total} Karten, davon {lands} Länder
+              {shortCards > 0 && (
+                <span className="warn">
+                  {' '}
+                  · {shortCards} fehlen · {euro(shortValue)}
+                </span>
+              )}
             </h2>
             <div
               className="curve"

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { summary } from './format'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 
 const name = (c: PrivateCard) => c.name_de || c.name
 const type = (c: PrivateCard) => c.type_de || c.type_line
-const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 
 /* Cards a player owns outside the cube. The database only ever returns the
    rows of the player who is logged in. */
@@ -97,7 +97,7 @@ export default function MyCardsPage() {
         {notice && <span className="muted">{notice}</span>}
       </div>
       <p className="muted summary">
-        {list.length} Karten · {copies} Kopien · {euro(value)}
+        {summary({ cards: list.length, copies, value })}
       </p>
 
       {error ? (

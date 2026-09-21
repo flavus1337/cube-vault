@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { summary } from './format'
 import { fetchAll, type Card, type Copy, type CubeSet, type PrivateCard } from './supabase'
 
 // One row per card, no matter which list it came from.
@@ -36,7 +37,6 @@ const RARITIES: [string, string][] = [
   ['rare', 'Selten'],
   ['mythic', 'Mythisch selten'],
 ]
-const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 
 // A land counts as land, everything else by its colours.
 function colorGroup(row: Row) {
@@ -76,13 +76,17 @@ export default function StatsPage() {
   // Count each card once, or every copy you own.
   const [unit, setUnit] = useState<'cards' | 'copies'>('cards')
   const [rows, setRows] = useState<Row[] | null>(null)
+  // Cube cards nobody has scanned yet, and what one copy each would cost.
+  const [missing, setMissing] = useState<{ cards: number; value: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let stop = false
     ;(source === 'cube' ? loadCube() : loadMine())
       .then((loaded) => {
-        if (!stop) setRows(loaded)
+        if (stop) return
+        setRows(loaded.rows)
+        setMissing(loaded.missing)
       })
       .catch((e) => {
         if (!stop) setError((e as Error).message)
@@ -164,7 +168,7 @@ export default function StatsPage() {
       ) : (
         <>
           <p className="muted summary">
-            {stats.cards} Karten · {stats.copies} Kopien · {euro(stats.value)}
+            {summary(stats, missing ?? undefined)}
           </p>
           {source === 'cube' && (
             <p className="muted">
@@ -182,7 +186,7 @@ export default function StatsPage() {
   )
 }
 
-async function loadCube(): Promise<Row[]> {
+async function loadCube() {
   const [cards, sets, copies] = await Promise.all([
     fetchAll<Card>('cards', 'id'),
     fetchAll<CubeSet>('sets', 'code'),
@@ -191,21 +195,27 @@ async function loadCube(): Promise<Row[]> {
   const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
   const owned = new Map<string, number>()
   for (const copy of copies) owned.set(copy.card_id, (owned.get(copy.card_id) ?? 0) + copy.qty)
-  return cards
-    .filter((c) => inCube.has(c.set_code) && !c.excluded && owned.has(c.id))
-    .map((c) => ({
-      colors: c.colors,
-      cmc: c.cmc,
-      type: c.type_de || c.type_line,
-      rarity: c.rarity,
-      price: c.price_eur,
-      qty: owned.get(c.id) ?? 0,
-    }))
+  const inSets = cards.filter((c) => inCube.has(c.set_code) && !c.excluded)
+  const gap = inSets.filter((c) => !owned.has(c.id))
+  return {
+    rows: inSets
+      .filter((c) => owned.has(c.id))
+      .map((c) => ({
+        colors: c.colors,
+        cmc: c.cmc,
+        type: c.type_de || c.type_line,
+        rarity: c.rarity,
+        price: c.price_eur,
+        qty: owned.get(c.id) ?? 0,
+      })),
+    missing: { cards: gap.length, value: gap.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
+  }
 }
 
-async function loadMine(): Promise<Row[]> {
+async function loadMine() {
   const cards = await fetchAll<PrivateCard>('private_cards', 'print_id')
-  return cards.map((c) => ({
+  // Own cards are cards you have, so nothing can be missing here.
+  const rows = cards.map((c) => ({
     colors: c.colors,
     cmc: c.cmc,
     type: c.type_de || c.type_line,
@@ -213,4 +223,5 @@ async function loadMine(): Promise<Row[]> {
     price: c.price_eur,
     qty: c.qty,
   }))
+  return { rows, missing: null }
 }
