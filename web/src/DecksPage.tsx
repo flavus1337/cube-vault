@@ -309,15 +309,31 @@ export default function DecksPage() {
       ) : (
         <div className="builder">
           <section className="deck-side">
-            <h2>
-              Deck · {total} Karten, davon {lands} Länder
+            <dl className="deck-stats">
+              <div>
+                <dt>Karten</dt>
+                <dd>{total}</dd>
+              </div>
+              <div>
+                <dt>Länder</dt>
+                <dd>{lands}</dd>
+              </div>
+              <div>
+                <dt>Zauber</dt>
+                <dd>{total - lands}</dd>
+              </div>
               {shortCards > 0 && (
-                <span className="warn">
-                  {' '}
-                  · {shortCards} fehlen · {euro(shortValue)}
-                </span>
+                <div className="warn">
+                  <dt>Fehlen</dt>
+                  <dd title="Kopien, die du nicht hast oder die in anderen Decks stecken">
+                    {shortCards} · {euro(shortValue)}
+                  </dd>
+                </div>
               )}
-            </h2>
+            </dl>
+            <h3 className="side-title">
+              Manakurve <span className="muted">Karten je Manabetrag, ohne Länder</span>
+            </h3>
             <div
               className="curve"
               role="img"
@@ -336,13 +352,15 @@ export default function DecksPage() {
             </div>
             {suggestion.length > 0 && (
               <div className="lands-hint">
-                <p className="muted">
-                  Empfehlung:{' '}
+                <p>
                   <strong>
                     {suggestion
                       .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
                       .join(' · ')}
                   </strong>
+                  <span className="muted">
+                    Standardländer, passend zu den Farben deiner {total - lands} Zauber
+                  </span>
                 </p>
                 <button
                   className="primary"

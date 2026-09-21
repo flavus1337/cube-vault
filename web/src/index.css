@@ -350,7 +350,17 @@ tr.waiting td { background: #e8a24a14; }
   margin: 10px 0; padding: 10px 12px; border: 1px solid var(--brass); border-radius: 10px;
   background: var(--panel-soft);
 }
-.lands-hint p { margin: 0; }
+.lands-hint p { margin: 0; display: grid; gap: 2px; }
+.lands-hint .muted { font-size: 13px; }
+
+.deck-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 10px; }
+.deck-stats div { display: grid; gap: 1px; }
+.deck-stats dt { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.deck-stats dd { margin: 0; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.deck-stats .warn dt, .deck-stats .warn dd { color: var(--warning, #e1ad55); }
+
+.side-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 14px; margin: 12px 0 0; }
+.side-title .muted { font-size: 12px; font-weight: 400; }
 .lands-hint strong { color: var(--text); }
 
 .search-help { margin: 8px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
