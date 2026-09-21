@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { readMine, writeMine } from './cache'
+import CardDetail from './CardDetail'
+import { useCube } from './cube'
 import { euro } from './format'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
 import { parseQuery } from './query'
-import { fetchAll, supabase, type Card, type Copy, type CubeSet, type PrivateCard } from './supabase'
+import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
 
 type Deck = { id: string; name: string; created_at: string }
 type DeckCard = { deck_id: string; print_id: string; qty: number }
@@ -72,37 +75,26 @@ function drawTen(cards: { row: DeckCard; card: PoolCard }[]) {
 /* Decks are private: only their owner sees them. The cards in them can come
    from the player's own collection or from the shared cube. */
 export default function DecksPage() {
-  const [mine, setMine] = useState<PoolCard[]>([])
-  const [cube, setCube] = useState<PoolCard[]>([])
+  const cubeData = useCube()
+  const [privateCards, setPrivateCards] = useState<PrivateCard[]>(() => readMine() ?? [])
   const [decks, setDecks] = useState<Deck[]>([])
   const [deckCards, setDeckCards] = useState<DeckCard[]>([])
   const [current, setCurrent] = useState('')
   const [source, setSource] = useState<'mine' | 'cube'>('mine')
   const [text, setText] = useState('')
   const [hand, setHand] = useState<PoolCard[] | null>(null)
+  // The card shown in the detail view, held by key so its numbers stay fresh.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [busyLands, setBusyLands] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  /* The pools hold every card of the cube, so they are loaded once. Putting a
-     card into a deck only writes one small row. */
+  /* Own cards are small and only you change them; the cube comes from the
+     shared cache. Putting a card into a deck writes one small row. */
   async function loadPools() {
-    const [privateCards, cards, sets, copies] = await Promise.all([
-      fetchAll<PrivateCard>('private_cards', 'print_id'),
-      fetchAll<Card>('cards', 'id'),
-      fetchAll<CubeSet>('sets', 'code'),
-      fetchAll<Copy>('copies', 'print_id'),
-    ])
-    const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
-    const owned = new Map<string, number>()
-    for (const copy of copies) owned.set(copy.card_id, (owned.get(copy.card_id) ?? 0) + copy.qty)
-
-    setMine(privateCards.map(fromPrivate))
-    setCube(
-      cards
-        .filter((c) => inCube.has(c.set_code) && !c.excluded && owned.has(c.id))
-        .map((c) => fromCube(c, owned.get(c.id) ?? 0)),
-    )
+    const rows = await fetchAll<PrivateCard>('private_cards', 'print_id')
+    setPrivateCards(rows)
+    writeMine(rows)
   }
 
   async function loadDecks() {
@@ -128,6 +120,14 @@ export default function DecksPage() {
       stop = true
     }
   }, [])
+
+  const mine = useMemo(() => privateCards.map(fromPrivate), [privateCards])
+  const cube = useMemo(() => {
+    const inCube = new Set(cubeData.sets.filter((s) => s.in_cube).map((s) => s.code))
+    return cubeData.cards
+      .filter((c) => inCube.has(c.set_code) && !c.excluded && cubeData.copies.get(c.id))
+      .map((c) => fromCube(c, cubeData.copies.get(c.id) ?? 0))
+  }, [cubeData.cards, cubeData.sets, cubeData.copies])
 
   const byKey = useMemo(
     () => new Map([...mine, ...cube].map((card) => [card.key, card])),
@@ -189,6 +189,9 @@ export default function DecksPage() {
     .map((d) => ({ row: d, card: byKey.get(d.print_id) }))
     .filter((x): x is { row: DeckCard; card: PoolCard } => Boolean(x.card))
     .sort((a, b) => a.card.cmc - b.card.cmc || name(a.card).localeCompare(name(b.card), 'de'))
+
+  const selected = selectedKey ? (byKey.get(selectedKey) ?? null) : null
+  const selectedQty = inDeck.find((row) => row.print_id === selectedKey)?.qty ?? 0
 
   const total = deckList.reduce((sum, x) => sum + x.row.qty, 0)
   const spells = deckList
@@ -392,40 +395,29 @@ export default function DecksPage() {
                     <span className={`dot dot-${key}`} aria-hidden="true" />
                     {label} · {count}
                   </h3>
-                  <ul className="deck-list">
+                  <div className="deck-stack">
                     {rows.map(({ row, card }) => {
                       const elsewhere = usedElsewhere(card.key)
-                      const tooMany = row.qty + elsewhere > card.owned
+                      const short = Math.max(0, row.qty + elsewhere - card.owned)
                       return (
-                        <li key={card.key}>
-                          <button
-                            aria-label={`Eine ${name(card)} weniger`}
-                            onClick={() => change(card.key, -1)}
-                          >
-                            −
-                          </button>
-                          <span className="deck-qty">{row.qty}×</span>
-                          <span className="deck-name" title={`${name(card)} · ${card.cmc} Mana`}>
-                            {name(card)}
-                            <span className="muted"> · {card.cmc}</span>
-                            {tooMany && (
-                              <span className="warn">
-                                {' '}
-                                · vorhanden {card.owned}
-                                {elsewhere > 0 && `, ${elsewhere} in anderen Decks`}
-                              </span>
-                            )}
-                          </span>
-                          <button
-                            aria-label={`Eine ${name(card)} mehr`}
-                            onClick={() => change(card.key, 1)}
-                          >
-                            +
-                          </button>
-                        </li>
+                        <button
+                          key={card.key}
+                          className={`stack-card${short ? ' short' : ''}`}
+                          title={`${name(card)} · ${card.cmc} Mana${short ? ` · ${short} fehlen` : ''}`}
+                          aria-label={`${name(card)}, ${row.qty} im Deck`}
+                          onClick={() => setSelectedKey(card.key)}
+                        >
+                          {card.image ? (
+                            <img src={card.image} alt={name(card)} loading="lazy" />
+                          ) : (
+                            <div className="noimg">{name(card)}</div>
+                          )}
+                          <span className="badge">{row.qty}×</span>
+                          {short > 0 && <span className="badge out">{short} fehlen</span>}
+                        </button>
                       )
                     })}
-                  </ul>
+                  </div>
                 </div>
               )
             })}
@@ -458,26 +450,58 @@ export default function DecksPage() {
               {shown.map((card) => {
                 const inThisDeck = inDeck.find((row) => row.print_id === card.key)?.qty ?? 0
                 return (
-                  <button
-                    key={card.key}
-                    className="tile"
-                    title={`${name(card)} — ${card.type_de || card.type_line}`}
-                    onClick={() => change(card.key, 1)}
-                  >
-                    {card.image ? (
-                      <img src={card.image} alt={name(card)} loading="lazy" />
-                    ) : (
-                      <div className="noimg">{name(card)}</div>
-                    )}
-                    {inThisDeck > 0 && <span className="badge">{inThisDeck}×</span>}
-                    <span className="badge out">{card.owned} da</span>
-                  </button>
+                  <div key={card.key} className="tile-wrap">
+                    <button
+                      className="tile"
+                      title={`${name(card)} — ${card.type_de || card.type_line}`}
+                      aria-label={`${name(card)} ins Deck`}
+                      onClick={() => change(card.key, 1)}
+                    >
+                      {card.image ? (
+                        <img src={card.image} alt={name(card)} loading="lazy" />
+                      ) : (
+                        <div className="noimg">{name(card)}</div>
+                      )}
+                      {inThisDeck > 0 && <span className="badge">{inThisDeck}×</span>}
+                      <span className="badge out">{card.owned} da</span>
+                    </button>
+                    <button
+                      className="peek"
+                      title="Karte ansehen"
+                      aria-label={`${name(card)} ansehen`}
+                      onClick={() => setSelectedKey(card.key)}
+                    >
+                      ⌕
+                    </button>
+                  </div>
                 )
               })}
             </div>
             {!pool.length && <p className="status">Keine Karten gefunden.</p>}
           </section>
         </div>
+      )}
+
+      {selected && (
+        <CardDetail
+          card={selected}
+          note={`${selectedQty}× im Deck · ${selected.owned} vorhanden`}
+          onClose={() => setSelectedKey(null)}
+        >
+          <div className="copies">
+            <button
+              disabled={!current || selectedQty === 0}
+              onClick={() => change(selected.key, -1)}
+              aria-label="Eine Kopie weniger"
+            >
+              −
+            </button>
+            <strong>{selectedQty}</strong>
+            <button disabled={!current} onClick={() => change(selected.key, 1)} aria-label="Eine Kopie mehr">
+              +
+            </button>
+          </div>
+        </CardDetail>
       )}
     </main>
   )

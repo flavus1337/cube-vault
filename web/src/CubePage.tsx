@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { clearCache, readCache, writeCache } from './cache'
-import { cardmarket, euro, png, RARITY, summary } from './format'
+import { clearCache } from './cache'
+import CardDetail from './CardDetail'
+import { useCube } from './cube'
+import { RARITY, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
-import { loadTags, type CardTag } from './tags'
-import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
+import { loadTags } from './tags'
+import { canEdit, supabase, type Card, type CubeSet, type Role } from './supabase'
 
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
 const COLOR_LABELS: Record<string, string> = {
@@ -161,38 +163,12 @@ const SORTS: Record<string, string> = {
   number: 'Set-Nummer',
 }
 
-const countCopies = (rows: Copy[]) => {
-  const counts = new Map<string, number>()
-  for (const c of rows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
-  return counts
-}
-
-const groupTags = (rows: CardTag[]) => {
-  const byCard = new Map<string, string[]>()
-  for (const row of rows) byCard.set(row.card_id, [...(byCard.get(row.card_id) ?? []), row.tag])
-  return byCard
-}
-
-const groupPrints = (rows: Copy[]) => {
-  const byCard = new Map<string, Copy[]>()
-  for (const c of rows) byCard.set(c.card_id, [...(byCard.get(c.card_id) ?? []), c])
-  for (const list of byCard.values()) list.sort((a, b) => b.qty - a.qty)
-  return byCard
-}
-
 const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
 
 export default function CubePage({ role }: { role: Role }) {
-  const [cards, setCards] = useState<Card[]>([])
-  const [sets, setSets] = useState<CubeSet[]>([])
-  const [copies, setCopies] = useState<Map<string, number>>(new Map())
-  // Prints scanned per card, most copies first: + and - act on the first one.
-  const [prints, setPrints] = useState<Map<string, Copy[]>>(new Map())
-  // Oracle tags per card, e.g. removal or ramp.
-  const [tags, setTags] = useState<Map<string, string[]>>(new Map())
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Cards, sets, scanned copies and oracle tags, cached between visits.
+  const { cards, sets, copies, prints, tags, loading, error, reloadCopies, patchCard } = useCube()
 
   const [text, setText] = useState('')
   const [showHelp, setShowHelp] = useState(false)
@@ -212,94 +188,6 @@ export default function CubePage({ role }: { role: Role }) {
   const [filterDraft, setFilterDraft] = useState<AdvancedFilters | null>(null)
   const filterOpener = useRef<HTMLButtonElement>(null)
   const [notice, setNotice] = useState('')
-
-  useEffect(() => {
-    let stop = false
-    // Everything the page holds, so it can be written back to the cache.
-    let store = { lastEvent: 0, cards: [] as Card[], sets: [] as CubeSet[], copies: [] as Copy[], tags: [] as CardTag[] }
-
-    function apply() {
-      setCards(store.cards)
-      setSets(store.sets)
-      setCopies(countCopies(store.copies))
-      setPrints(groupPrints(store.copies))
-      setTags(groupTags(store.tags))
-      setError(null)
-      setLoading(false)
-      writeCache(store)
-    }
-
-    async function loadAll() {
-      try {
-        const [cards, sets, copyRows, tagRows, newest] = await Promise.all([
-          fetchAll<Card>('cards', 'id'),
-          fetchAll<CubeSet>('sets', 'code'),
-          fetchAll<Copy>('copies', 'print_id'),
-          fetchAll<CardTag>('card_tags', 'card_id'),
-          supabase.from('card_events').select('id').order('id', { ascending: false }).limit(1).maybeSingle(),
-        ])
-        if (stop) return
-        store = {
-          cards,
-          sets,
-          copies: copyRows,
-          tags: tagRows,
-          lastEvent: (newest.data?.id as number | undefined) ?? 0,
-        }
-        apply()
-      } catch (e) {
-        if (!stop) {
-          setError((e as Error).message)
-          setLoading(false)
-        }
-      }
-    }
-
-    /* Other people's scans arrive as events. Reloading every card each time
-       would move about 2 MB, so only the cards named in the new events are
-       fetched again. A hidden tab asks for nothing. */
-    async function catchUp() {
-      if (document.hidden) return
-      const { data: events } = await supabase
-        .from('card_events')
-        .select('id, action, card_id')
-        .gt('id', store.lastEvent)
-        .order('id')
-      if (stop || !events?.length) return
-      store.lastEvent = events[events.length - 1].id as number
-
-      // A set came or went: which cards belong to the cube changes, so reload.
-      if (events.some((e) => String(e.action).startsWith('set_'))) return loadAll()
-
-      const ids = [...new Set(events.map((e) => e.card_id).filter((id): id is string => Boolean(id)))]
-      if (!ids.length) return
-      const [changedCards, changedCopies] = await Promise.all([
-        supabase.from('cards').select('*').in('id', ids),
-        supabase.from('copies').select('*').in('card_id', ids),
-      ])
-      if (stop) return
-      store.cards = [...store.cards.filter((c) => !ids.includes(c.id)), ...((changedCards.data ?? []) as Card[])]
-      store.copies = [
-        ...store.copies.filter((row) => !ids.includes(row.card_id)),
-        ...((changedCopies.data ?? []) as Copy[]),
-      ]
-      apply()
-    }
-
-    const cached = readCache()
-    if (cached) {
-      store = cached
-      apply()
-      catchUp()
-    } else {
-      loadAll()
-    }
-    const timer = setInterval(catchUp, 15000)
-    return () => {
-      stop = true
-      clearInterval(timer)
-    }
-  }, [])
 
   // Keywords that actually appear on the cards in the database.
   const keywords = useMemo(
@@ -475,9 +363,7 @@ export default function CubePage({ role }: { role: Role }) {
       ...(delta > 0 ? { p_lang: known[0]?.lang ?? 'en' } : {}),
     })
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
-    const copyRows = await fetchAll<Copy>('copies', 'print_id')
-    setCopies(countCopies(copyRows))
-    setPrints(groupPrints(copyRows))
+    await reloadCopies()
   }
 
   async function toggleExcluded(card: Card) {
@@ -490,7 +376,7 @@ export default function CubePage({ role }: { role: Role }) {
     const { error } = await supabase.from('cards').update(patch).eq('id', card.id)
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
     const updated = { ...card, ...patch }
-    setCards((all) => all.map((c) => (c.id === card.id ? updated : c)))
+    patchCard(updated)
     setSelected(updated)
   }
 
@@ -911,36 +797,18 @@ function CardDialog(props: {
     await onChangeCopies(delta)
     setBusy(false)
   }
-  const ref = useRef<HTMLDialogElement>(null)
-  const [hiRes, setHiRes] = useState<string | null>(null)
-
-  useEffect(() => {
-    ref.current?.showModal()
-  }, [])
-
-  // Show the cached grid image first, swap in the PNG once it has loaded.
-  // The dialog is keyed by card id, so hiRes starts empty for every card.
-  useEffect(() => {
-    if (!card.image) return
-    const img = new Image()
-    img.onload = () => setHiRes(img.src)
-    img.src = png(card.image)
-    return () => {
-      img.onload = null
-    }
-  }, [card.image])
 
   return (
-    <dialog ref={ref} className="detail" aria-labelledby="card-detail-title" onClose={onClose}>
-      {card.image && <img src={hiRes ?? card.image} alt={name(card)} />}
-      <h2 id="card-detail-title">{name(card)}</h2>
-      {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
-      <p>{type(card)}</p>
-      <p className="rules">{card.text_de || card.oracle_text}</p>
-      <p className="muted">
-        {card.set_code.toUpperCase()} #{card.number} · {RARITY[card.rarity] ?? card.rarity} · {euro(card.price_eur)} ·{' '}
-        {copies}× gescannt
-      </p>
+    <CardDetail
+      card={card}
+      note={`${copies}× gescannt`}
+      onClose={onClose}
+      actions={
+        editable ? (
+          <button onClick={onToggleExcluded}>{card.excluded ? 'Wieder aufnehmen' : 'Ausschließen'}</button>
+        ) : null
+      }
+    >
       {editable && (
         <div className="copies">
           <button id="fewer" disabled={busy || copies === 0} onClick={() => change(-1)} aria-label="Eine Kopie weniger">
@@ -952,26 +820,9 @@ function CardDialog(props: {
           </button>
         </div>
       )}
-      <p>
-        <a
-          href={cardmarket(card.name)}
-          target="_blank"
-          rel="noopener"
-        >
-          Bei Cardmarket suchen
-        </a>
-      </p>
       {card.excluded && (
         <p className="warn">Ausgeschlossen{card.exclude_reason ? `: ${card.exclude_reason}` : ''}</p>
       )}
-      <div className="actions">
-        {editable && (
-          <button onClick={onToggleExcluded}>{card.excluded ? 'Wieder aufnehmen' : 'Ausschließen'}</button>
-        )}
-        <button className="primary" onClick={() => ref.current?.close()}>
-          Schließen
-        </button>
-      </div>
-    </dialog>
+    </CardDetail>
   )
 }

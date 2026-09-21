@@ -1,5 +1,5 @@
 import type { CardTag } from './tags'
-import type { Card, Copy, CubeSet } from './supabase'
+import type { Card, Copy, CubeSet, PrivateCard } from './supabase'
 
 /* The cube is about 2 MB of cards that hardly ever change. Keeping them in
    localStorage means a visit only asks for the events since the last one.
@@ -41,5 +41,26 @@ export function clearCache() {
     localStorage.removeItem(KEY)
   } catch {
     // nothing to do
+  }
+}
+
+/* Own cards are few and only you change them, so the page shows the stored
+   ones at once and replaces them with whatever the database answers. */
+const MINE = 'my-cards-v1'
+
+export function readMine(): PrivateCard[] | null {
+  try {
+    const raw = localStorage.getItem(MINE)
+    return raw ? (JSON.parse(raw) as PrivateCard[]) : null
+  } catch {
+    return null
+  }
+}
+
+export function writeMine(cards: PrivateCard[]) {
+  try {
+    localStorage.setItem(MINE, JSON.stringify(cards))
+  } catch {
+    // No space or no storage at all: the page just fetches them again.
   }
 }
