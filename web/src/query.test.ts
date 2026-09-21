@@ -11,7 +11,7 @@ function card(fields: Partial<Card>, copies = 1): CardInfo {
       type_line: 'Creature — Otter', type_de: 'Kreatur — Otter', oracle_text: '', text_de: null,
       mana_cost: '{1}{U}', cmc: 2, colors: 'U', color_identity: 'U', keywords: [], rarity: 'rare',
       layout: 'normal', image: null, image_en: null, price_eur: 1, excluded: false,
-      exclude_reason: null, ...fields,
+      legalities: null, exclude_reason: null, ...fields,
     } as Card,
   }
 }
@@ -83,6 +83,15 @@ test('keywords and an empty search', () => {
 })
 
 test('unknown fields are reported', () => {
-  assert.deepEqual(parseQuery('id:bg f:commander t:verzauberung').unknown, ['f'])
+  assert.deepEqual(parseQuery('id:bg pow>=3 t:verzauberung').unknown, ['pow'])
   assert.deepEqual(parseQuery('c:r mv<=2').unknown, [])
+})
+
+test('formats come from the legalities', () => {
+  const card1 = card({ legalities: { commander: 'legal', legacy: 'banned', vintage: 'restricted' } })
+  assert.ok(hit('f:commander', card1))
+  assert.ok(!hit('f:legacy', card1))
+  assert.ok(hit('banned:legacy', card1))
+  assert.ok(hit('restricted:vintage', card1))
+  assert.deepEqual(parseQuery('id:bg f:commander t:verzauberung').unknown, [])
 })

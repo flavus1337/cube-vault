@@ -528,7 +528,7 @@ export default function CubePage({ role }: { role: Role }) {
               className="link-button"
               onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}
             >
-              Preise aktualisieren
+              Kartendaten aktualisieren
             </button>
           )}
         </span>
@@ -547,6 +547,7 @@ export default function CubePage({ role }: { role: Role }) {
             <li><code>t:kreatur</code> Typ · <code>o:"opfere"</code> Kartentext · <code>kw:fliegend</code> Schlüsselwort</li>
             <li><code>mv&lt;=2</code> Manawert · <code>r&gt;=rare</code> Seltenheit · <code>eur&gt;5</code> Preis</li>
             <li><code>s:blb</code> Set · <code>copies&gt;1</code> mehrfach · <code>is:missing</code> fehlt euch</li>
+            <li><code>f:commander</code> im Format erlaubt · <code>banned:legacy</code> · <code>restricted:vintage</code></li>
             <li><code>-t:land</code> schließt aus · <code>or</code> verknüpft · <code>( )</code> gruppiert</li>
           </ul>
         </div>

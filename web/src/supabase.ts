@@ -51,6 +51,8 @@ export type Card = {
   image: string | null
   image_en: string | null
   price_eur: number | null
+  // Scryfall's legalities: {"commander": "legal", "legacy": "banned", …}
+  legalities: Record<string, string> | null
   excluded: boolean
   exclude_reason: string | null
 }

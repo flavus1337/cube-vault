@@ -23,7 +23,7 @@ async function scryfall(url: string) {
 
 /** EUR price of the English print, keyed by "set/collector number". */
 export async function pricesOfSets(sets: string[], progress: (text: string) => void) {
-  const prices = new Map<string, number>()
+  const prices = new Map<string, { price_eur: number | null; legalities: Record<string, string> | null }>()
   for (const [i, set] of sets.entries()) {
     progress(`Preise laden … Set ${i + 1} von ${sets.length} (${set.toUpperCase()})`)
     let url: string | null =
@@ -32,12 +32,23 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
         unique: 'prints',
       })}`
     while (url) {
-      const page: { data: { collector_number: string; prices?: { eur?: string | null } }[]; has_more: boolean; next_page?: string } | null =
-        await scryfall(url)
+      const page: {
+        data: {
+          collector_number: string
+          prices?: { eur?: string | null }
+          legalities?: Record<string, string>
+        }[]
+        has_more: boolean
+        next_page?: string
+      } | null = await scryfall(url)
       if (!page) break
       for (const card of page.data) {
         const eur = parseFloat(card.prices?.eur ?? '')
-        if (!Number.isNaN(eur)) prices.set(`${set}/${card.collector_number}`, eur)
+        prices.set(`${set}/${card.collector_number}`, {
+          // A German print has no price of its own; then the old one stays.
+          price_eur: Number.isNaN(eur) ? null : eur,
+          legalities: card.legalities ?? null,
+        })
       }
       url = page.has_more && page.next_page ? page.next_page : null
     }
@@ -51,28 +62,31 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     'id',
     'id, set_code, number, price_eur',
   )
-  const prices = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
-  const changed = cards
-    .map((c) => ({ id: c.id, old: c.price_eur, price_eur: prices.get(`${c.set_code}/${c.number}`) }))
-    .filter((c) => c.price_eur !== undefined && c.price_eur !== c.old)
-    .map((c) => ({ id: c.id, price_eur: c.price_eur! }))
+  const fresh = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
+  const rows = cards
+    .map((c) => ({ id: c.id, ...fresh.get(`${c.set_code}/${c.number}`) }))
+    .filter((row) => row.price_eur !== undefined || row.legalities !== undefined)
 
   // One update statement per batch: an upsert would fail on the not-null
   // columns of the row it pretends to insert.
-  for (let i = 0; i < changed.length; i += 500) {
-    progress(`Speichern … ${Math.min(i + 500, changed.length)} von ${changed.length}`)
-    const { error } = await supabase.rpc('set_prices', { rows: changed.slice(i, i + 500) })
+  for (let i = 0; i < rows.length; i += 500) {
+    progress(`Speichern … ${Math.min(i + 500, rows.length)} von ${rows.length}`)
+    const { error } = await supabase.rpc('set_card_data', { rows: rows.slice(i, i + 500) })
     if (error) throw error
   }
-  progress(`Fertig: ${changed.length} von ${cards.length} Karten haben einen neuen Preis.`)
+  progress(`Fertig: ${rows.length} von ${cards.length} Karten aktualisiert.`)
 }
 
 export async function refreshPrivatePrices(progress: (text: string) => void) {
   const cards = await fetchAll<PrivateCard>('private_cards', 'print_id')
   const prices = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
   const changed = cards
-    .map((c) => ({ print_id: c.print_id, price_eur: prices.get(`${c.set_code}/${c.number}`), old: c.price_eur }))
-    .filter((c) => c.price_eur !== undefined && c.price_eur !== c.old)
+    .map((c) => ({
+      print_id: c.print_id,
+      price_eur: prices.get(`${c.set_code}/${c.number}`)?.price_eur ?? null,
+      old: c.price_eur,
+    }))
+    .filter((c) => c.price_eur !== null && c.price_eur !== c.old)
     .map((c) => ({ print_id: c.print_id, price_eur: c.price_eur! }))
 
   if (changed.length) {

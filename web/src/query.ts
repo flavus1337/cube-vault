@@ -22,6 +22,7 @@ export const FIELDS = new Set([
   'name', 't', 'type', 'typ', 'o', 'oracle', 'text', 'c', 'color', 'farbe', 'id', 'identity',
   'mv', 'cmc', 'manawert', 'r', 'rarity', 'seltenheit', 's', 'set', 'e', 'kw', 'keyword',
   'copies', 'kopien', 'eur', 'price', 'preis', 'is',
+  'f', 'format', 'legal', 'banned', 'restricted',
 ])
 
 const COLOR_LETTERS = 'wubrg'
@@ -186,6 +187,14 @@ function term(field: string, operator: string, value: string): Predicate {
     case 'price':
     case 'preis':
       return ({ card }) => compare(card.price_eur ?? 0, operator, number)
+    case 'f':
+    case 'format':
+    case 'legal':
+      return ({ card }) => card.legalities?.[wanted] === 'legal'
+    case 'banned':
+      return ({ card }) => card.legalities?.[wanted] === 'banned'
+    case 'restricted':
+      return ({ card }) => card.legalities?.[wanted] === 'restricted'
     case 'is':
       return isTest(value)
     default: // unknown field: treat the whole thing as plain words

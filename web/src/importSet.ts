@@ -26,6 +26,7 @@ type ScryCard = Face & {
   rarity: string
   layout?: string
   prices?: { eur?: string | null }
+  legalities?: Record<string, string>
   card_faces?: Face[]
 }
 
@@ -131,6 +132,7 @@ export function buildRows(
       image: image(de) ?? image(en),
       image_en: image(en),
       price_eur: Number.isNaN(price) ? null : price,
+      legalities: en.legalities ?? null,
     }
   })
 }

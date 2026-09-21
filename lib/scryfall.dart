@@ -233,6 +233,8 @@ Map<String, Object?> _cardRow(
     'image': _image(de) ?? _image(en),
     'image_en': _image(en),
     'price_eur': double.tryParse('${en['prices']?['eur']}'),
+    // Which formats allow the card, as Scryfall reports it.
+    'legalities': en['legalities'],
     'excluded': basic,
     'exclude_reason': basic ? 'Standardland' : null,
   };
