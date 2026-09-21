@@ -61,14 +61,14 @@ export default function DecksPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function load() {
-    const [privateCards, cards, sets, copies, decks, deckCards] = await Promise.all([
+  /* The pools hold every card of the cube, so they are loaded once. Putting a
+     card into a deck only writes one small row. */
+  async function loadPools() {
+    const [privateCards, cards, sets, copies] = await Promise.all([
       fetchAll<PrivateCard>('private_cards', 'print_id'),
       fetchAll<Card>('cards', 'id'),
       fetchAll<CubeSet>('sets', 'code'),
       fetchAll<Copy>('copies', 'print_id'),
-      fetchAll<Deck>('decks', 'created_at'),
-      fetchAll<DeckCard>('deck_cards', 'deck_id'),
     ])
     const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
     const owned = new Map<string, number>()
@@ -80,6 +80,13 @@ export default function DecksPage() {
         .filter((c) => inCube.has(c.set_code) && !c.excluded && owned.has(c.id))
         .map((c) => fromCube(c, owned.get(c.id) ?? 0)),
     )
+  }
+
+  async function loadDecks() {
+    const [decks, deckCards] = await Promise.all([
+      fetchAll<Deck>('decks', 'created_at'),
+      fetchAll<DeckCard>('deck_cards', 'deck_id'),
+    ])
     setDecks(decks)
     setDeckCards(deckCards)
     setCurrent((id) => id || decks[0]?.id || '')
@@ -87,7 +94,7 @@ export default function DecksPage() {
 
   useEffect(() => {
     let stop = false
-    load()
+    Promise.all([loadPools(), loadDecks()])
       .catch((e) => {
         if (!stop) setError((e as Error).message)
       })
@@ -108,6 +115,7 @@ export default function DecksPage() {
   const usedElsewhere = (key: string) =>
     deckCards.filter((d) => d.print_id === key && d.deck_id !== current).reduce((s, d) => s + d.qty, 0)
 
+  const POOL_LIMIT = 80
   const pool = useMemo(() => {
     const search = text.trim().toLowerCase()
     return (source === 'mine' ? mine : cube)
@@ -116,14 +124,15 @@ export default function DecksPage() {
       )
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
   }, [mine, cube, source, text])
+  const shown = pool.slice(0, POOL_LIMIT)
 
   async function newDeck() {
     const deckName = prompt('Name des Decks?')
     if (!deckName) return
     const { data, error } = await supabase.from('decks').insert({ name: deckName }).select().single()
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    setDecks((all) => [...all, data as Deck])
     setCurrent((data as Deck).id)
-    void load()
   }
 
   async function removeDeck() {
@@ -131,21 +140,27 @@ export default function DecksPage() {
     if (!deck || !confirm(`„${deck.name}“ löschen?`)) return
     const { error } = await supabase.from('decks').delete().eq('id', deck.id)
     if (error) return alert(`Löschen fehlgeschlagen: ${error.message}`)
+    setDeckCards((rows) => rows.filter((row) => row.deck_id !== deck.id))
+    setDecks((all) => all.filter((d) => d.id !== deck.id))
     setCurrent('')
-    void load()
   }
 
   async function change(key: string, delta: number) {
     if (!current) return
-    const row = inDeck.find((d) => d.print_id === key)
-    const qty = (row?.qty ?? 0) + delta
-    const query =
+    const qty = (inDeck.find((d) => d.print_id === key)?.qty ?? 0) + delta
+    // Show the change at once, then write it; a failed write reloads the deck.
+    setDeckCards((rows) => {
+      const others = rows.filter((row) => !(row.deck_id === current && row.print_id === key))
+      return qty > 0 ? [...others, { deck_id: current, print_id: key, qty }] : others
+    })
+    const { error } =
       qty <= 0
-        ? supabase.from('deck_cards').delete().eq('deck_id', current).eq('print_id', key)
-        : supabase.from('deck_cards').upsert({ deck_id: current, print_id: key, qty })
-    const { error } = await query
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
-    void load()
+        ? await supabase.from('deck_cards').delete().eq('deck_id', current).eq('print_id', key)
+        : await supabase.from('deck_cards').upsert({ deck_id: current, print_id: key, qty })
+    if (error) {
+      alert(`Speichern fehlgeschlagen: ${error.message}`)
+      void loadDecks()
+    }
   }
 
   const deckList = inDeck
@@ -281,7 +296,7 @@ export default function DecksPage() {
                     setBusyLands(true)
                     try {
                       await addLands(current, suggestion)
-                      await load()
+                      await Promise.all([loadPools(), loadDecks()])
                     } catch (e) {
                       alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
                     } finally {
@@ -349,7 +364,7 @@ export default function DecksPage() {
               onChange={(e) => setText(e.target.value)}
             />
             <ul className="deck-list">
-              {pool.map((card) => (
+              {shown.map((card) => (
                 <li key={card.key}>
                   <span className="deck-qty">{card.owned}×</span>
                   <span className="deck-name">
@@ -365,6 +380,11 @@ export default function DecksPage() {
                 </li>
               ))}
             </ul>
+            {pool.length > shown.length && (
+              <p className="muted">
+                {pool.length - shown.length} weitere. Such nach Name, Typ oder Set.
+              </p>
+            )}
           </section>
         </div>
       )}
