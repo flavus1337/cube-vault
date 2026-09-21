@@ -448,6 +448,9 @@ export default function CubePage({ role }: { role: Role }) {
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
   // Cardmarket price of the English print, times the copies you own.
   const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * (copies.get(c.id) ?? 0), 0)
+  // In the missing view every card counts once: what one copy each would cost.
+  const missing = list.filter((c) => !copies.get(c.id))
+  const missingValue = missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0)
 
   // Editors change the number of scanned copies right here.
   async function changeCopies(card: Card, delta: number) {
@@ -602,7 +605,9 @@ export default function CubePage({ role }: { role: Role }) {
         />
       )}
       <p className="muted summary">
-        {ownedCount} Karten · {copyCount} Kopien · {euro(value)}
+        {show === 'missing'
+          ? `${missing.length} fehlende Karten · ${euro(missingValue)}`
+          : `${ownedCount} Karten · ${copyCount} Kopien · ${euro(value)}`}
       </p>
 
       {error ? (
