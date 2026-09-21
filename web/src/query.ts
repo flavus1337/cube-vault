@@ -120,6 +120,14 @@ function isTest(word: string): Predicate {
     case 'excluded':
     case 'ausgeschlossen':
       return ({ card }) => card.excluded
+    case 'commander':
+      // Legendary creatures, plus cards that say they may be your commander.
+      return ({ card }) =>
+        (/legend(är|ary)/i.test(typeLine(card)) && TYPE_WORDS.creature.test(typeLine(card))) ||
+        /can be your commander|kann dein commander sein/i.test(rulesText(card))
+    case 'legendary':
+    case 'legendär':
+      return ({ card }) => /legend(är|ary)/i.test(typeLine(card))
     case 'multicolor':
     case 'gold':
       return ({ card }) => card.colors.length > 1

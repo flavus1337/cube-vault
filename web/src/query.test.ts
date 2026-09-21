@@ -95,3 +95,17 @@ test('formats come from the legalities', () => {
   assert.ok(hit('restricted:vintage', card1))
   assert.deepEqual(parseQuery('id:bg f:commander t:verzauberung').unknown, [])
 })
+
+test('is:commander finds legends and the cards that say so', () => {
+  const legend = card({ type_line: 'Legendary Creature — Elf', type_de: 'Legendäre Kreatur — Elf' })
+  const plain = card({ type_line: 'Creature — Elf', type_de: 'Kreatur — Elf' })
+  const partner = card({
+    type_line: 'Planeswalker — Freyalise',
+    type_de: 'Planeswalker — Freyalise',
+    oracle_text: 'Freyalise can be your commander.',
+  })
+  assert.ok(hit('is:commander', legend))
+  assert.ok(!hit('is:commander', plain))
+  assert.ok(hit('is:commander', partner))
+  assert.ok(hit('is:legendary', legend))
+})
