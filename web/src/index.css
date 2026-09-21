@@ -329,3 +329,21 @@ tr.waiting td { background: #e8a24a14; }
 
 .deck-layout h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .deck-layout h2 select { font-size: 14px; }
+
+.builder { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 20px; margin-top: 12px; align-items: start; }
+.builder > * { min-width: 0; }
+.deck-side { position: sticky; top: 74px; max-height: calc(100dvh - 90px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+.deck-side .deck-list li { min-width: 0; }
+.deck-side h2 { font-size: 17px; margin: 0 0 4px; }
+.deck-group h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
+.deck-group .deck-list { max-height: none; overflow: visible; }
+.dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); }
+.dot-W { background: var(--W); } .dot-U { background: var(--U); } .dot-B { background: var(--B); }
+.dot-R { background: var(--R); } .dot-G { background: var(--G); } .dot-C { background: var(--C); }
+.dot-M { background: linear-gradient(135deg, var(--W), var(--U) 30%, var(--B) 50%, var(--R) 70%, var(--G)); }
+.dot-L { background: var(--line-strong); }
+.pool .toolbar { margin-bottom: 8px; }
+@media (max-width: 860px) {
+  .builder { grid-template-columns: minmax(0, 1fr); }
+  .deck-side { position: static; max-height: none; }
+}

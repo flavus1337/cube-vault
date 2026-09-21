@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
+import { parseQuery } from './query'
 import { fetchAll, supabase, type Card, type Copy, type CubeSet, type PrivateCard } from './supabase'
 
 type Deck = { id: string; name: string; created_at: string }
@@ -8,27 +9,48 @@ type DeckCard = { deck_id: string; print_id: string; qty: number }
 
 /* A card a deck can hold, from the player's own cards or from the cube. `key`
    is what deck_cards stores: the scanned print for own cards, the card id for
-   cube cards. */
-type PoolCard = {
-  key: string
-  name: string
-  name_de: string | null
-  type_line: string
-  type_de: string | null
-  mana_cost: string
-  cmc: number
-  image: string | null
-  set_code: string
-  number: string
-  owned: number
-  source: 'mine' | 'cube'
-}
+   cube cards. It carries the full card shape so the cube search works on it. */
+type PoolCard = Card & { key: string; owned: number; source: 'mine' | 'cube' }
+
+const GROUPS: [string, string][] = [
+  ['W', 'Weiß'],
+  ['U', 'Blau'],
+  ['B', 'Schwarz'],
+  ['R', 'Rot'],
+  ['G', 'Grün'],
+  ['M', 'Mehrfarbig'],
+  ['C', 'Farblos'],
+  ['L', 'Länder'],
+]
 
 const name = (c: PoolCard) => c.name_de || c.name
 const isLand = (c: PoolCard) => /Land/i.test(c.type_de || c.type_line)
 
+function groupOf(card: PoolCard) {
+  if (isLand(card)) return 'L'
+  if (!card.colors) return 'C'
+  return card.colors.length > 1 ? 'M' : card.colors
+}
+
 function fromPrivate(card: PrivateCard): PoolCard {
-  return { ...card, key: card.print_id, owned: card.qty, source: 'mine' }
+  return {
+    ...card,
+    id: card.print_id,
+    key: card.print_id,
+    owned: card.qty,
+    source: 'mine',
+    // Own cards keep less data than cube cards; the search treats these as empty.
+    oracle_text: '',
+    text_de: null,
+    color_identity: card.colors,
+    keywords: [],
+    legalities: null,
+    layout: null,
+    image_en: card.image,
+    excluded: false,
+    exclude_reason: null,
+    rarity: card.rarity ?? 'common',
+  }
 }
 
 function fromCube(card: Card, copies: number): PoolCard {
@@ -115,13 +137,12 @@ export default function DecksPage() {
   const usedElsewhere = (key: string) =>
     deckCards.filter((d) => d.print_id === key && d.deck_id !== current).reduce((s, d) => s + d.qty, 0)
 
-  const POOL_LIMIT = 80
+  const POOL_LIMIT = 60
   const pool = useMemo(() => {
-    const search = text.trim().toLowerCase()
+    // The same search language as the cube page, e.g. "c:r mv<=2 -t:land".
+    const matches = parseQuery(text).test
     return (source === 'mine' ? mine : cube)
-      .filter((c) =>
-        [c.name, c.name_de, c.type_line, c.type_de, c.set_code].join(' ').toLowerCase().includes(search),
-      )
+      .filter((card) => matches({ card, copies: card.owned }))
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
   }, [mine, cube, source, text])
   const shown = pool.slice(0, POOL_LIMIT)
@@ -277,8 +298,8 @@ export default function DecksPage() {
       {!current ? (
         <p className="status">Wähle ein Deck oder lege eines an.</p>
       ) : (
-        <div className="deck-layout">
-          <section>
+        <div className="builder">
+          <section className="deck-side">
             <h2>
               Deck · {total} Karten, davon {lands} Länder
             </h2>
@@ -309,42 +330,65 @@ export default function DecksPage() {
               </p>
             )}
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
-            <ul className="deck-list">
-              {deckList.map(({ row, card }) => {
-                const elsewhere = usedElsewhere(card.key)
-                const tooMany = row.qty + elsewhere > card.owned
-                return (
-                  <li key={card.key}>
-                    <button aria-label={`Eine ${name(card)} weniger`} onClick={() => change(card.key, -1)}>
-                      −
-                    </button>
-                    <span className="deck-qty">{row.qty}×</span>
-                    <span className="deck-name">
-                      {name(card)}
-                      <span className="muted">
-                        {' '}
-                        · {card.cmc} Mana · {card.source === 'cube' ? 'Cube' : 'eigene'}
-                      </span>
-                      {tooMany && (
-                        <span className="warn">
-                          {' '}
-                          · vorhanden {card.owned}
-                          {elsewhere > 0 && `, ${elsewhere} in anderen Decks`}
-                        </span>
-                      )}
-                    </span>
-                    <button aria-label={`Eine ${name(card)} mehr`} onClick={() => change(card.key, 1)}>
-                      +
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            {GROUPS.map(([key, label]) => {
+              const rows = deckList.filter(({ card }) => groupOf(card) === key)
+              if (!rows.length) return null
+              const count = rows.reduce((sum, x) => sum + x.row.qty, 0)
+              return (
+                <div key={key} className="deck-group">
+                  <h3>
+                    <span className={`dot dot-${key}`} aria-hidden="true" />
+                    {label} · {count}
+                  </h3>
+                  <ul className="deck-list">
+                    {rows.map(({ row, card }) => {
+                      const elsewhere = usedElsewhere(card.key)
+                      const tooMany = row.qty + elsewhere > card.owned
+                      return (
+                        <li key={card.key}>
+                          <button
+                            aria-label={`Eine ${name(card)} weniger`}
+                            onClick={() => change(card.key, -1)}
+                          >
+                            −
+                          </button>
+                          <span className="deck-qty">{row.qty}×</span>
+                          <span className="deck-name" title={`${name(card)} · ${card.cmc} Mana`}>
+                            {name(card)}
+                            <span className="muted"> · {card.cmc}</span>
+                            {tooMany && (
+                              <span className="warn">
+                                {' '}
+                                · vorhanden {card.owned}
+                                {elsewhere > 0 && `, ${elsewhere} in anderen Decks`}
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            aria-label={`Eine ${name(card)} mehr`}
+                            onClick={() => change(card.key, 1)}
+                          >
+                            +
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )
+            })}
           </section>
 
-          <section>
-            <h2>
-              Kartenpool
+          <section className="pool">
+            <div className="toolbar">
+              <input
+                id="deck-search"
+                type="search"
+                placeholder="Suche, z. B. c:r mv<=2"
+                aria-label="Karten suchen"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
               <select
                 id="deck-source"
                 aria-label="Kartenpool"
@@ -354,37 +398,32 @@ export default function DecksPage() {
                 <option value="mine">Meine Karten</option>
                 <option value="cube">Cube</option>
               </select>
-            </h2>
-            <input
-              id="deck-search"
-              type="search"
-              placeholder="Name, Typ oder Set"
-              aria-label="Karten suchen"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <ul className="deck-list">
-              {shown.map((card) => (
-                <li key={card.key}>
-                  <span className="deck-qty">{card.owned}×</span>
-                  <span className="deck-name">
-                    {name(card)}
-                    <span className="muted">
-                      {' '}
-                      · {card.set_code.toUpperCase()} #{card.number}
-                    </span>
-                  </span>
-                  <button aria-label={`${name(card)} ins Deck`} onClick={() => change(card.key, 1)}>
-                    +
+            </div>
+            <p className="muted summary">
+              {pool.length} Karten im Pool{pool.length > shown.length && `, ${shown.length} gezeigt`}
+            </p>
+            <div className="grid">
+              {shown.map((card) => {
+                const inThisDeck = inDeck.find((row) => row.print_id === card.key)?.qty ?? 0
+                return (
+                  <button
+                    key={card.key}
+                    className="tile"
+                    title={`${name(card)} — ${card.type_de || card.type_line}`}
+                    onClick={() => change(card.key, 1)}
+                  >
+                    {card.image ? (
+                      <img src={card.image} alt={name(card)} loading="lazy" />
+                    ) : (
+                      <div className="noimg">{name(card)}</div>
+                    )}
+                    {inThisDeck > 0 && <span className="badge">{inThisDeck}×</span>}
+                    <span className="badge out">{card.owned} da</span>
                   </button>
-                </li>
-              ))}
-            </ul>
-            {pool.length > shown.length && (
-              <p className="muted">
-                {pool.length - shown.length} weitere. Such nach Name, Typ oder Set.
-              </p>
-            )}
+                )
+              })}
+            </div>
+            {!pool.length && <p className="status">Keine Karten gefunden.</p>}
           </section>
         </div>
       )}
