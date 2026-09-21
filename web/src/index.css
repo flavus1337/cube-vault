@@ -320,3 +320,9 @@ tr.waiting td { background: #e8a24a14; }
 .hand-cards figcaption strong { color: var(--text); }
 
 .lands-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; }
+
+.search-help { margin: 8px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-soft); color: var(--muted); font-size: 14px; }
+.search-help p { margin: 0 0 6px; }
+.search-help ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.search-help code { color: var(--text); background: var(--panel-raised); padding: 1px 5px; border-radius: 5px; }

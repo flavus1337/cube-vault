@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
+import { parseQuery } from './query'
 import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
 const RARITY: Record<string, string> = {
@@ -193,6 +194,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [loading, setLoading] = useState(true)
 
   const [text, setText] = useState('')
+  const [showHelp, setShowHelp] = useState(false)
   const [colors, setColors] = useState<Set<string>>(new Set())
   const [rarity, setRarity] = useState('')
   const [cardType, setCardType] = useState('')
@@ -385,7 +387,8 @@ export default function CubePage({ role }: { role: Role }) {
     }
 
     const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
-    const search = text.trim().toLowerCase()
+    // The search understands the Scryfall style, e.g. "c:r mv<=2 -t:land".
+    const matches = parseQuery(text)
     const result = cards.filter(
       (c) =>
         inCube.has(c.set_code) &&
@@ -397,11 +400,7 @@ export default function CubePage({ role }: { role: Role }) {
         (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
         colorsMatch(c) &&
         (!keyword || c.keywords.includes(keyword)) &&
-        // The rules text is searched too, so "Marke" or "Spielstein" find cards.
-        [c.name, c.name_de, c.type_line, c.type_de, c.text_de, c.oracle_text, c.set_code]
-          .join(' ')
-          .toLowerCase()
-          .includes(search),
+        matches({ card: c, copies: copies.get(c.id) ?? 0 }),
     )
     const byName = (a: Card, b: Card) => name(a).localeCompare(name(b), 'de')
     const sorters: Record<string, (a: Card, b: Card) => number> = {
@@ -456,7 +455,7 @@ export default function CubePage({ role }: { role: Role }) {
         <input
           id="search"
           type="search"
-          placeholder="Name, Text, Typ oder Set"
+          placeholder="Suche, z. B. c:r mv<=2"
           aria-label="Suche"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -485,6 +484,9 @@ export default function CubePage({ role }: { role: Role }) {
           <option value="missing">Fehlende Karten</option>
           <option value="all">Alle Karten</option>
         </select>
+        <button className="link-button" onClick={() => setShowHelp(!showHelp)} aria-expanded={showHelp}>
+          Suchhilfe
+        </button>
         <button
           ref={filterOpener}
           id="filters"
@@ -528,6 +530,18 @@ export default function CubePage({ role }: { role: Role }) {
           )}
         </span>
       </div>
+      {showHelp && (
+        <div className="search-help">
+          <p>Wörter ohne Doppelpunkt suchen in Name, Typ und Kartentext.</p>
+          <ul>
+            <li><code>c:r</code> rot · <code>c=ur</code> genau Blau-Rot · <code>c:c</code> farblos</li>
+            <li><code>t:kreatur</code> Typ · <code>o:"opfere"</code> Kartentext · <code>kw:fliegend</code> Schlüsselwort</li>
+            <li><code>mv&lt;=2</code> Manawert · <code>r&gt;=rare</code> Seltenheit · <code>eur&gt;5</code> Preis</li>
+            <li><code>s:blb</code> Set · <code>copies&gt;1</code> mehrfach · <code>is:missing</code> fehlt euch</li>
+            <li><code>-t:land</code> schließt aus · <code>or</code> verknüpft · <code>( )</code> gruppiert</li>
+          </ul>
+        </div>
+      )}
       {notice && <p className="muted notice">{notice}</p>}
       {filterDraft && (
         <FilterDialog
