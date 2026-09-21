@@ -9,3 +9,16 @@ export function summary(
   const line = `${owned.cards} Karten · ${owned.copies} Kopien · ${euro(owned.value)}`
   return missing?.cards ? `${line} · ${missing.cards} fehlen · ${euro(missing.value)}` : line
 }
+
+export const RARITY: Record<string, string> = {
+  common: 'Gewöhnlich',
+  uncommon: 'Ungewöhnlich',
+  rare: 'Selten',
+  mythic: 'Mythisch selten',
+}
+
+/** Sharpest Scryfall image (745×1040 PNG), only worth it in the detail view. */
+export const png = (url: string) => url.replace('/normal/', '/png/').replace('.jpg', '.png')
+
+export const cardmarket = (name: string) =>
+  `https://www.cardmarket.com/de/Magic/Products/Search?searchString=${encodeURIComponent(name)}`

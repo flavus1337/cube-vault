@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { euro, summary } from './format'
+import { cardmarket, euro, png, RARITY, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { loadTags, type CardTag } from './tags'
 import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
-const RARITY: Record<string, string> = {
-  common: 'Gewöhnlich',
-  uncommon: 'Ungewöhnlich',
-  rare: 'Selten',
-  mythic: 'Mythisch selten',
-}
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
 const COLOR_LABELS: Record<string, string> = {
   W: 'Weiß',
@@ -187,8 +181,6 @@ const groupPrints = (rows: Copy[]) => {
 
 const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
-// Sharpest Scryfall image (745×1040 PNG), only for the detail view.
-const png = (url: string) => url.replace('/normal/', '/png/').replace('.jpg', '.png')
 
 export default function CubePage({ role }: { role: Role }) {
   const [cards, setCards] = useState<Card[]>([])
@@ -941,7 +933,7 @@ function CardDialog(props: {
       )}
       <p>
         <a
-          href={`https://www.cardmarket.com/de/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`}
+          href={cardmarket(card.name)}
           target="_blank"
           rel="noopener"
         >

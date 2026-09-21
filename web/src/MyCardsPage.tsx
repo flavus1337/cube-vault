@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { summary } from './format'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { cardmarket, euro, png, RARITY, summary } from './format'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 
@@ -14,6 +14,8 @@ export default function MyCardsPage() {
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
   const [notice, setNotice] = useState('')
+  // Held by id, so the copy count in the dialog follows the reloaded rows.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   async function load(quiet = false) {
     try {
@@ -61,6 +63,7 @@ export default function MyCardsPage() {
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
   }, [cards, text])
 
+  const selected = cards.find((c) => c.print_id === selectedId) ?? null
   const copies = list.reduce((sum, c) => sum + c.qty, 0)
   const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * c.qty, 0)
 
@@ -112,11 +115,18 @@ export default function MyCardsPage() {
         <div className="grid">
           {list.map((c) => (
             <div key={c.print_id} className="tile private">
-              {c.image ? (
-                <img src={c.image} alt={name(c)} title={`${name(c)} — ${type(c)}`} loading="lazy" />
-              ) : (
-                <div className="noimg">{name(c)}</div>
-              )}
+              <button
+                className="tile-open"
+                title={`${name(c)} — ${type(c)}`}
+                aria-label={`${name(c)} ansehen`}
+                onClick={() => setSelectedId(c.print_id)}
+              >
+                {c.image ? (
+                  <img src={c.image} alt={name(c)} loading="lazy" />
+                ) : (
+                  <div className="noimg">{name(c)}</div>
+                )}
+              </button>
               <span className="badge">{c.qty}×</span>
               <div className="copies">
                 <button aria-label={`Eine Kopie von ${name(c)} weniger`} onClick={() => change(c, -1)}>
@@ -130,6 +140,81 @@ export default function MyCardsPage() {
           ))}
         </div>
       )}
+
+      {selected && (
+        <CardDialog
+          key={selected.print_id}
+          card={selected}
+          onChange={(delta) => change(selected, delta)}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </main>
+  )
+}
+
+/* The same detail view as in the cube, for the few fields own cards carry.
+   Scanning keeps no rules text for them. */
+function CardDialog(props: {
+  card: PrivateCard
+  onChange: (delta: number) => Promise<void>
+  onClose: () => void
+}) {
+  const { card, onChange, onClose } = props
+  const ref = useRef<HTMLDialogElement>(null)
+  const [hiRes, setHiRes] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    ref.current?.showModal()
+  }, [])
+
+  // Show the cached grid image first, swap in the PNG once it has loaded.
+  useEffect(() => {
+    if (!card.image) return
+    const img = new Image()
+    img.onload = () => setHiRes(img.src)
+    img.src = png(card.image)
+    return () => {
+      img.onload = null
+    }
+  }, [card.image])
+
+  async function step(delta: number) {
+    setBusy(true)
+    await onChange(delta)
+    setBusy(false)
+  }
+
+  return (
+    <dialog ref={ref} className="detail" aria-labelledby="my-card-title" onClose={onClose}>
+      {card.image && <img src={hiRes ?? card.image} alt={name(card)} />}
+      <h2 id="my-card-title">{name(card)}</h2>
+      {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
+      <p>{type(card)}</p>
+      <p className="muted">
+        {card.set_code.toUpperCase()} #{card.number} · {RARITY[card.rarity ?? ''] ?? card.rarity} ·{' '}
+        {euro(card.price_eur)} · {card.qty}× vorhanden
+      </p>
+      <div className="copies">
+        <button disabled={busy || card.qty === 0} onClick={() => step(-1)} aria-label="Eine Kopie weniger">
+          −
+        </button>
+        <strong>{card.qty}</strong>
+        <button disabled={busy} onClick={() => step(1)} aria-label="Eine Kopie mehr">
+          +
+        </button>
+      </div>
+      <p>
+        <a href={cardmarket(card.name)} target="_blank" rel="noopener">
+          Bei Cardmarket suchen
+        </a>
+      </p>
+      <div className="actions">
+        <button className="primary" onClick={() => ref.current?.close()}>
+          Schließen
+        </button>
+      </div>
+    </dialog>
   )
 }
