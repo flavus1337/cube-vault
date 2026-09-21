@@ -303,15 +303,34 @@ export default function DecksPage() {
             <h2>
               Deck · {total} Karten, davon {lands} Länder
             </h2>
-            <p className="muted">Kurve: {curve.map(([label, n]) => `${label}: ${n}`).join(' · ')}</p>
+            <div
+              className="curve"
+              role="img"
+              aria-label={`Manakurve: ${curve.map(([label, n]) => `${n} Karten mit ${label} Mana`).join(', ')}`}
+            >
+              {curve.map(([label, n]) => (
+                <span key={label} className="curve-col">
+                  <span className="curve-value">{n || ''}</span>
+                  <span
+                    className="curve-bar"
+                    style={{ height: `${Math.max(...curve.map(([, m]) => m), 1) ? (n / Math.max(...curve.map(([, m]) => m), 1)) * 100 : 0}%` }}
+                  />
+                  <span className="curve-label">{label}</span>
+                </span>
+              ))}
+            </div>
             {suggestion.length > 0 && (
-              <p className="muted lands-hint">
-                Empfehlung:{' '}
-                {suggestion
-                  .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
-                  .join(' · ')}
+              <div className="lands-hint">
+                <p className="muted">
+                  Empfehlung:{' '}
+                  <strong>
+                    {suggestion
+                      .map(({ colour, count }) => `${count} ${BASICS.find(([key]) => key === colour)![2]}`)
+                      .join(' · ')}
+                  </strong>
+                </p>
                 <button
-                  className="link-button"
+                  className="primary"
                   disabled={busyLands}
                   onClick={async () => {
                     setBusyLands(true)
@@ -327,7 +346,7 @@ export default function DecksPage() {
                 >
                   {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
                 </button>
-              </p>
+              </div>
             )}
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
             {GROUPS.map(([key, label]) => {

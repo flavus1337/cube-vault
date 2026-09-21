@@ -319,7 +319,13 @@ tr.waiting td { background: #e8a24a14; }
 .hand h3 { font-size: 15px; color: var(--muted); margin: 12px 0 6px; }
 .hand-cards figcaption strong { color: var(--text); }
 
-.lands-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; }
+.lands-hint {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 0; padding: 10px 12px; border: 1px solid var(--brass); border-radius: 10px;
+  background: var(--panel-soft);
+}
+.lands-hint p { margin: 0; }
+.lands-hint strong { color: var(--text); }
 
 .search-help { margin: 8px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel-soft); color: var(--muted); font-size: 14px; }
@@ -347,3 +353,9 @@ tr.waiting td { background: #e8a24a14; }
   .builder { grid-template-columns: minmax(0, 1fr); }
   .deck-side { position: static; max-height: none; }
 }
+
+.curve { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; height: 96px; margin: 8px 0 4px; }
+.curve-col { display: grid; grid-template-rows: 16px minmax(0, 1fr) 16px; align-items: end; justify-items: center; gap: 3px; }
+.curve-value { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.curve-bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 4px 4px 0 0; align-self: end; }
+.curve-label { font-size: 12px; color: var(--muted); }
