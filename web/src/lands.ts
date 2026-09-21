@@ -78,11 +78,16 @@ async function basicLand(colour: string): Promise<PrivateCard> {
   }
 }
 
-/** Puts the suggested lands into the player's cards and into the deck. */
-export async function addLands(deckId: string, wanted: { colour: string; count: number }[]) {
-  for (const { colour, count } of wanted) {
+/* Puts the suggested lands into the player's cards and into the deck. `count`
+   is how many the deck should end up with, `have` how many are in it already,
+   so pressing the button twice does not double the lands. */
+export async function addLands(
+  deckId: string,
+  wanted: { colour: string; count: number; have?: number }[],
+) {
+  for (const { colour, count, have = 0 } of wanted) {
     const land = await basicLand(colour)
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count - have; i++) {
       const { error } = await supabase.rpc('add_private_copy', { card: { ...land, qty: undefined, added_at: undefined } })
       if (error) throw error
     }

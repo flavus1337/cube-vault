@@ -201,6 +201,19 @@ export default function DecksPage() {
     spells.reduce((sum, x) => sum + x.qty, 0),
     pipsOf(spells),
   )
+  /* Basics already in the deck, by colour. Scryfall keeps the English name on
+     German prints, so that is what they are recognized by. */
+  const basicsInDeck = Object.fromEntries(
+    BASICS.map(([colour, english]) => [
+      colour,
+      deckList.filter((x) => x.card.name === english).reduce((sum, x) => sum + x.row.qty, 0),
+    ]),
+  )
+  const wantedLands = suggestion
+    .map((share) => ({ ...share, have: basicsInDeck[share.colour] ?? 0 }))
+    .filter((share) => share.count > share.have)
+  // Enough lands in the deck, whatever their colours: nothing left to add.
+  const landsWanted = suggestion.reduce((sum, share) => sum + share.count, 0)
   const lands = deckList.filter((x) => isLand(x.card)).reduce((sum, x) => sum + x.row.qty, 0)
   /* Copies the deck wants but nobody has: what you own minus what the other
      decks already hold. Buying them costs the price of the English print. */
@@ -365,23 +378,27 @@ export default function DecksPage() {
                     Standardländer, passend zu den Farben deiner {total - lands} Zauber
                   </span>
                 </p>
-                <button
-                  className="primary"
-                  disabled={busyLands}
-                  onClick={async () => {
-                    setBusyLands(true)
-                    try {
-                      await addLands(current, suggestion)
-                      await Promise.all([loadPools(), loadDecks()])
-                    } catch (e) {
-                      alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
-                    } finally {
-                      setBusyLands(false)
-                    }
-                  }}
-                >
-                  {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
-                </button>
+                {lands >= landsWanted || !wantedLands.length ? (
+                  <p className="muted">Deine {lands} Länder reichen.</p>
+                ) : (
+                  <button
+                    className="primary"
+                    disabled={busyLands}
+                    onClick={async () => {
+                      setBusyLands(true)
+                      try {
+                        await addLands(current, wantedLands)
+                        await Promise.all([loadPools(), loadDecks()])
+                      } catch (e) {
+                        alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
+                      } finally {
+                        setBusyLands(false)
+                      }
+                    }}
+                  >
+                    {busyLands ? 'wird hinzugefügt …' : 'Länder hinzufügen'}
+                  </button>
+                )}
               </div>
             )}
             {!deckList.length && <p className="status">Noch leer. Karten rechts antippen.</p>}
