@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { clearCache, readCache, writeCache } from './cache'
 import { cardmarket, euro, png, RARITY, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
@@ -214,7 +215,19 @@ export default function CubePage({ role }: { role: Role }) {
 
   useEffect(() => {
     let stop = false
-    let lastEvent = 0
+    // Everything the page holds, so it can be written back to the cache.
+    let store = { lastEvent: 0, cards: [] as Card[], sets: [] as CubeSet[], copies: [] as Copy[], tags: [] as CardTag[] }
+
+    function apply() {
+      setCards(store.cards)
+      setSets(store.sets)
+      setCopies(countCopies(store.copies))
+      setPrints(groupPrints(store.copies))
+      setTags(groupTags(store.tags))
+      setError(null)
+      setLoading(false)
+      writeCache(store)
+    }
 
     async function loadAll() {
       try {
@@ -226,17 +239,19 @@ export default function CubePage({ role }: { role: Role }) {
           supabase.from('card_events').select('id').order('id', { ascending: false }).limit(1).maybeSingle(),
         ])
         if (stop) return
-        setCards(cards)
-        setSets(sets)
-        setCopies(countCopies(copyRows))
-        setPrints(groupPrints(copyRows))
-        setTags(groupTags(tagRows))
-        setError(null)
-        lastEvent = (newest.data?.id as number | undefined) ?? 0
+        store = {
+          cards,
+          sets,
+          copies: copyRows,
+          tags: tagRows,
+          lastEvent: (newest.data?.id as number | undefined) ?? 0,
+        }
+        apply()
       } catch (e) {
-        if (!stop) setError((e as Error).message)
-      } finally {
-        if (!stop) setLoading(false)
+        if (!stop) {
+          setError((e as Error).message)
+          setLoading(false)
+        }
       }
     }
 
@@ -248,10 +263,10 @@ export default function CubePage({ role }: { role: Role }) {
       const { data: events } = await supabase
         .from('card_events')
         .select('id, action, card_id')
-        .gt('id', lastEvent)
+        .gt('id', store.lastEvent)
         .order('id')
       if (stop || !events?.length) return
-      lastEvent = events[events.length - 1].id as number
+      store.lastEvent = events[events.length - 1].id as number
 
       // A set came or went: which cards belong to the cube changes, so reload.
       if (events.some((e) => String(e.action).startsWith('set_'))) return loadAll()
@@ -263,24 +278,22 @@ export default function CubePage({ role }: { role: Role }) {
         supabase.from('copies').select('*').in('card_id', ids),
       ])
       if (stop) return
-      const fresh = (changedCards.data ?? []) as Card[]
-      setCards((all) => [...all.filter((c) => !ids.includes(c.id)), ...fresh])
-      const rows = (changedCopies.data ?? []) as Copy[]
-      setCopies((all) => {
-        const next = new Map(all)
-        for (const id of ids) next.delete(id)
-        for (const [id, qty] of countCopies(rows)) next.set(id, qty)
-        return next
-      })
-      setPrints((all) => {
-        const next = new Map(all)
-        for (const id of ids) next.delete(id)
-        for (const [id, list] of groupPrints(rows)) next.set(id, list)
-        return next
-      })
+      store.cards = [...store.cards.filter((c) => !ids.includes(c.id)), ...((changedCards.data ?? []) as Card[])]
+      store.copies = [
+        ...store.copies.filter((row) => !ids.includes(row.card_id)),
+        ...((changedCopies.data ?? []) as Copy[]),
+      ]
+      apply()
     }
 
-    loadAll()
+    const cached = readCache()
+    if (cached) {
+      store = cached
+      apply()
+      catchUp()
+    } else {
+      loadAll()
+    }
     const timer = setInterval(catchUp, 15000)
     return () => {
       stop = true
@@ -556,7 +569,11 @@ export default function CubePage({ role }: { role: Role }) {
           {canEdit(role) && (
             <button
               className="link-button"
-              onClick={() => refreshCubePrices(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}
+              onClick={() =>
+                refreshCubePrices(setNotice)
+                  .then(clearCache)
+                  .catch((e) => setNotice(`Fehler: ${e.message}`))
+              }
             >
               Kartendaten aktualisieren
             </button>
@@ -564,7 +581,11 @@ export default function CubePage({ role }: { role: Role }) {
           {canEdit(role) && (
             <button
               className="link-button"
-              onClick={() => loadTags(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}
+              onClick={() =>
+                loadTags(setNotice)
+                  .then(clearCache)
+                  .catch((e) => setNotice(`Fehler: ${e.message}`))
+              }
             >
               Schlagwörter laden
             </button>
