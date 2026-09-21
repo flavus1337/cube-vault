@@ -38,8 +38,12 @@ pnpm test       # search language, run by Node
 ```
 
 The cube search reads a Scryfall-style query: `c:r mv<=2 -t:land`,
-`o:"opfere" is:missing`, `(c:u or c:b) r>=rare`. The rules live in
-`web/src/query.ts`, the examples behind the "Suchhilfe" button.
+`o:"opfere" is:missing`, `(c:u or c:b) r>=rare`, `otag:removal`. The rules live
+in `web/src/query.ts`, the examples behind the "Suchhilfe" button.
+
+Oracle tags come from Scryfall's Tagger project. They are not part of a card's
+data, so an editor loads them with "Schlagwörter laden"; they land in
+`card_tags` (`web/src/tags.ts`).
 
 Every push to `main` builds the website and publishes it to GitHub Pages
 (`.github/workflows/website.yml`). The Pages address must be listed under

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
+import { loadTags, type CardTag } from './tags'
 import { canEdit, fetchAll, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
 const RARITY: Record<string, string> = {
@@ -134,11 +135,11 @@ const keywordLabel = (key: string) => KEYWORDS[key] ?? key
 
 type AdvancedFilters = {
   colors: Set<string>
-  setCode: string
-  keyword: string
-  cardType: string
-  cmc: string
-  rarity: string
+  setCodes: string[]
+  keywordList: string[]
+  cardTypes: string[]
+  cmcs: string[]
+  rarities: string[]
   sort: string
   showExcluded: boolean
   exactColors: boolean
@@ -147,11 +148,11 @@ type AdvancedFilters = {
 type AppliedFilterKey = 'colors' | 'set' | 'keyword' | 'type' | 'cmc' | 'rarity' | 'excluded'
 
 const EMPTY_ADVANCED: Omit<AdvancedFilters, 'colors'> = {
-  setCode: '',
-  keyword: '',
-  cardType: '',
-  cmc: '',
-  rarity: '',
+  setCodes: [],
+  keywordList: [],
+  cardTypes: [],
+  cmcs: [],
+  rarities: [],
   sort: 'name',
   showExcluded: false,
   exactColors: false,
@@ -168,6 +169,12 @@ const countCopies = (rows: Copy[]) => {
   const counts = new Map<string, number>()
   for (const c of rows) counts.set(c.card_id, (counts.get(c.card_id) ?? 0) + c.qty)
   return counts
+}
+
+const groupTags = (rows: CardTag[]) => {
+  const byCard = new Map<string, string[]>()
+  for (const row of rows) byCard.set(row.card_id, [...(byCard.get(row.card_id) ?? []), row.tag])
+  return byCard
 }
 
 const groupPrints = (rows: Copy[]) => {
@@ -190,19 +197,21 @@ export default function CubePage({ role }: { role: Role }) {
   const [copies, setCopies] = useState<Map<string, number>>(new Map())
   // Prints scanned per card, most copies first: + and - act on the first one.
   const [prints, setPrints] = useState<Map<string, Copy[]>>(new Map())
+  // Oracle tags per card, e.g. removal or ramp.
+  const [tags, setTags] = useState<Map<string, string[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [text, setText] = useState('')
   const [showHelp, setShowHelp] = useState(false)
   const [colors, setColors] = useState<Set<string>>(new Set())
-  const [rarity, setRarity] = useState('')
-  const [cardType, setCardType] = useState('')
-  const [cmc, setCmc] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const [rarities, setRarities] = useState<string[]>([])
+  const [cardTypes, setCardTypes] = useState<string[]>([])
+  const [cmcs, setCmcs] = useState<string[]>([])
+  const [keywordList, setKeywordList] = useState<string[]>([])
   // On: only cards that need exactly the picked colours, e.g. mono blue.
   const [exactColors, setExactColors] = useState(false)
-  const [setCode, setSetCode] = useState('')
+  const [setCodes, setSetCodes] = useState<string[]>([])
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
   // The cube is what you own. Missing cards only exist after a whole-set import.
@@ -218,10 +227,11 @@ export default function CubePage({ role }: { role: Role }) {
 
     async function loadAll() {
       try {
-        const [cards, sets, copyRows, newest] = await Promise.all([
+        const [cards, sets, copyRows, tagRows, newest] = await Promise.all([
           fetchAll<Card>('cards', 'id'),
           fetchAll<CubeSet>('sets', 'code'),
           fetchAll<Copy>('copies', 'print_id'),
+          fetchAll<CardTag>('card_tags', 'card_id'),
           supabase.from('card_events').select('id').order('id', { ascending: false }).limit(1).maybeSingle(),
         ])
         if (stop) return
@@ -229,6 +239,7 @@ export default function CubePage({ role }: { role: Role }) {
         setSets(sets)
         setCopies(countCopies(copyRows))
         setPrints(groupPrints(copyRows))
+        setTags(groupTags(tagRows))
         setError(null)
         lastEvent = (newest.data?.id as number | undefined) ?? 0
       } catch (e) {
@@ -296,7 +307,16 @@ export default function CubePage({ role }: { role: Role }) {
   const unknownFields = useMemo(() => parseQuery(text).unknown, [text])
 
   const filtered =
-    Boolean(text || colors.size || rarity || cardType || cmc || keyword || setCode || showExcluded) ||
+    Boolean(
+      text ||
+        colors.size ||
+        rarities.length ||
+        cardTypes.length ||
+        cmcs.length ||
+        keywordList.length ||
+        setCodes.length ||
+        showExcluded,
+    ) ||
     exactColors ||
     show !== 'owned' ||
     sort !== 'name'
@@ -304,12 +324,12 @@ export default function CubePage({ role }: { role: Role }) {
   function resetFilters() {
     setText('')
     setColors(new Set())
-    setRarity('')
-    setCardType('')
-    setCmc('')
-    setKeyword('')
+    setRarities([])
+    setCardTypes([])
+    setCmcs([])
+    setKeywordList([])
     setExactColors(false)
-    setSetCode('')
+    setSetCodes([])
     setShowExcluded(false)
     setShow('owned')
     setSort('name')
@@ -324,35 +344,42 @@ export default function CubePage({ role }: { role: Role }) {
         label: `Farben: ${[...colors].map((color) => COLOR_LABELS[color]).join(', ')}${exactColors ? ' · exakt' : ''}`,
       })
     }
-    if (setCode) result.push({ key: 'set', label: `Set: ${cubeSets.find((set) => set.code === setCode)?.name ?? setCode}` })
-    if (keyword) result.push({ key: 'keyword', label: `Schlüsselwort: ${keywordLabel(keyword)}` })
-    if (cardType) result.push({ key: 'type', label: `Typ: ${cardType}` })
-    if (cmc) result.push({ key: 'cmc', label: `Manawert: ${cmc === '7' ? '7+' : cmc}` })
-    if (rarity) result.push({ key: 'rarity', label: `Seltenheit: ${RARITY[rarity] ?? rarity}` })
+    if (setCodes.length)
+      result.push({
+        key: 'set',
+        label: `Set: ${setCodes.map((code) => cubeSets.find((set) => set.code === code)?.name ?? code).join(', ')}`,
+      })
+    if (keywordList.length)
+      result.push({ key: 'keyword', label: `Schlüsselwort: ${keywordList.map(keywordLabel).join(', ')}` })
+    if (cardTypes.length) result.push({ key: 'type', label: `Typ: ${cardTypes.join(', ')}` })
+    if (cmcs.length)
+      result.push({ key: 'cmc', label: `Manawert: ${cmcs.map((v) => (v === '7' ? '7+' : v)).join(', ')}` })
+    if (rarities.length)
+      result.push({ key: 'rarity', label: `Seltenheit: ${rarities.map((v) => RARITY[v] ?? v).join(', ')}` })
     if (showExcluded) result.push({ key: 'excluded', label: 'Ausgeschlossene zeigen' })
     return result
-  }, [colors, exactColors, setCode, cubeSets, keyword, cardType, cmc, rarity, showExcluded])
+  }, [colors, exactColors, setCodes, cubeSets, keywordList, cardTypes, cmcs, rarities, showExcluded])
 
   function removeAppliedFilter(key: AppliedFilterKey) {
     if (key === 'colors') {
       setColors(new Set())
       setExactColors(false)
-    } else if (key === 'set') setSetCode('')
-    else if (key === 'keyword') setKeyword('')
-    else if (key === 'type') setCardType('')
-    else if (key === 'cmc') setCmc('')
-    else if (key === 'rarity') setRarity('')
+    } else if (key === 'set') setSetCodes([])
+    else if (key === 'keyword') setKeywordList([])
+    else if (key === 'type') setCardTypes([])
+    else if (key === 'cmc') setCmcs([])
+    else if (key === 'rarity') setRarities([])
     else setShowExcluded(false)
   }
 
   function openFilters() {
     setFilterDraft({
       colors: new Set(colors),
-      setCode,
-      keyword,
-      cardType,
-      cmc,
-      rarity,
+      setCodes,
+      keywordList,
+      cardTypes,
+      cmcs,
+      rarities,
       sort,
       showExcluded,
       exactColors: colors.size > 0 && exactColors,
@@ -366,11 +393,11 @@ export default function CubePage({ role }: { role: Role }) {
 
   function applyFilters(draft: AdvancedFilters) {
     setColors(new Set(draft.colors))
-    setSetCode(draft.setCode)
-    setKeyword(draft.keyword)
-    setCardType(draft.cardType)
-    setCmc(draft.cmc)
-    setRarity(draft.rarity)
+    setSetCodes(draft.setCodes)
+    setKeywordList(draft.keywordList)
+    setCardTypes(draft.cardTypes)
+    setCmcs(draft.cmcs)
+    setRarities(draft.rarities)
     setSort(draft.sort)
     setShowExcluded(draft.showExcluded)
     setExactColors(draft.colors.size > 0 && draft.exactColors)
@@ -395,15 +422,16 @@ export default function CubePage({ role }: { role: Role }) {
     const result = cards.filter(
       (c) =>
         inCube.has(c.set_code) &&
-        (!setCode || c.set_code === setCode) &&
+        (!setCodes.length || setCodes.includes(c.set_code)) &&
         (showExcluded || !c.excluded) &&
         (show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))) &&
-        (!rarity || c.rarity === rarity) &&
-        (!cmc || (cmc === '7' ? c.cmc >= 7 : c.cmc === Number(cmc))) &&
-        (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
+        (!rarities.length || rarities.includes(c.rarity)) &&
+        (!cmcs.length || cmcs.some((v) => (v === '7' ? c.cmc >= 7 : c.cmc === Number(v)))) &&
+        (!cardTypes.length ||
+          cardTypes.some((label) => TYPES.find(([name]) => name === label)?.[1].test(type(c)) ?? false)) &&
         colorsMatch(c) &&
-        (!keyword || c.keywords.includes(keyword)) &&
-        query.test({ card: c, copies: copies.get(c.id) ?? 0 }),
+        (!keywordList.length || keywordList.some((key) => c.keywords.includes(key))) &&
+        query.test({ card: c, copies: copies.get(c.id) ?? 0, tags: tags.get(c.id) }),
     )
     const byName = (a: Card, b: Card) => name(a).localeCompare(name(b), 'de')
     const sorters: Record<string, (a: Card, b: Card) => number> = {
@@ -414,7 +442,7 @@ export default function CubePage({ role }: { role: Role }) {
         a.set_code.localeCompare(b.set_code) || parseInt(a.number, 10) - parseInt(b.number, 10),
     }
     return result.sort(sorters[sort])
-  }, [cards, sets, copies, text, colors, exactColors, rarity, cardType, cmc, keyword, setCode, sort, showExcluded, show])
+  }, [cards, sets, copies, tags, text, colors, exactColors, rarities, cardTypes, cmcs, keywordList, setCodes, sort, showExcluded, show])
 
   const ownedCount = list.filter((c) => copies.get(c.id)).length
   const copyCount = list.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0)
@@ -531,6 +559,14 @@ export default function CubePage({ role }: { role: Role }) {
               Kartendaten aktualisieren
             </button>
           )}
+          {canEdit(role) && (
+            <button
+              className="link-button"
+              onClick={() => loadTags(setNotice).catch((e) => setNotice(`Fehler: ${e.message}`))}
+            >
+              Schlagwörter laden
+            </button>
+          )}
         </span>
       </div>
       {unknownFields.length > 0 && (
@@ -549,6 +585,7 @@ export default function CubePage({ role }: { role: Role }) {
             <li><code>s:blb</code> Set · <code>copies&gt;1</code> mehrfach · <code>is:missing</code> fehlt euch</li>
             <li><code>f:commander</code> im Format erlaubt · <code>banned:legacy</code> · <code>restricted:vintage</code></li>
             <li><code>is:commander</code> taugt als Commander · <code>is:legendary</code> · <code>is:multicolor</code></li>
+            <li><code>otag:removal</code> Schlagwort aus dem Tagger, auch <code>otag:ramp</code>, <code>otag:counterspell</code></li>
             <li><code>-t:land</code> schließt aus · <code>or</code> verknüpft · <code>( )</code> gruppiert</li>
           </ul>
         </div>
@@ -627,6 +664,12 @@ function FilterDialog(props: {
   const [keywordSearch, setKeywordSearch] = useState('')
   const setDraft = <K extends keyof AdvancedFilters>(key: K, value: AdvancedFilters[K]) =>
     onDraftChange({ ...draft, [key]: value })
+  /** Picking several values is the point: a click adds or removes one. */
+  const toggle = (key: 'setCodes' | 'keywordList' | 'cardTypes' | 'cmcs' | 'rarities', value: string) =>
+    onDraftChange({
+      ...draft,
+      [key]: draft[key].includes(value) ? draft[key].filter((v) => v !== value) : [...draft[key], value],
+    })
 
   const visibleSets = sets.filter((set) =>
     `${set.name} ${set.code}`.toLocaleLowerCase('de').includes(setSearch.trim().toLocaleLowerCase('de')),
@@ -691,18 +734,17 @@ function FilterDialog(props: {
           <div className="radio-list">
             {!setSearch && (
               <label>
-                <input type="radio" name="filter-set" checked={!draft.setCode} onChange={() => setDraft('setCode', '')} />
+                <input type="checkbox" checked={!draft.setCodes.length} onChange={() => setDraft('setCodes', [])} />
                 Alle Sets
               </label>
             )}
             {visibleSets.map((set) => (
               <label key={set.code}>
                 <input
-                  type="radio"
-                  name="filter-set"
+                  type="checkbox"
                   value={set.code}
-                  checked={draft.setCode === set.code}
-                  onChange={() => setDraft('setCode', set.code)}
+                  checked={draft.setCodes.includes(set.code)}
+                  onChange={() => toggle('setCodes', set.code)}
                 />
                 <span>{set.parent_code ? `↳ ${set.name}` : set.name}<small>{set.code.toUpperCase()}</small></span>
               </label>
@@ -724,18 +766,21 @@ function FilterDialog(props: {
           <div className="radio-list">
             {!keywordSearch && (
               <label>
-                <input type="radio" name="filter-keyword" checked={!draft.keyword} onChange={() => setDraft('keyword', '')} />
+                <input
+                  type="checkbox"
+                  checked={!draft.keywordList.length}
+                  onChange={() => setDraft('keywordList', [])}
+                />
                 Alle Schlüsselwörter
               </label>
             )}
             {visibleKeywords.map((key) => (
               <label key={key}>
                 <input
-                  type="radio"
-                  name="filter-keyword"
+                  type="checkbox"
                   value={key}
-                  checked={draft.keyword === key}
-                  onChange={() => setDraft('keyword', key)}
+                  checked={draft.keywordList.includes(key)}
+                  onChange={() => toggle('keywordList', key)}
                 />
                 {keywordLabel(key)}
               </label>
@@ -747,9 +792,17 @@ function FilterDialog(props: {
         <fieldset className="filter-fieldset">
           <legend>Kartentyp</legend>
           <div className="choice-pills">
-            <button aria-pressed={!draft.cardType} onClick={() => setDraft('cardType', '')}>Alle</button>
+            <button aria-pressed={!draft.cardTypes.length} onClick={() => setDraft('cardTypes', [])}>
+              Alle
+            </button>
             {TYPES.map(([label]) => (
-              <button key={label} aria-pressed={draft.cardType === label} onClick={() => setDraft('cardType', label)}>{label}</button>
+              <button
+                key={label}
+                aria-pressed={draft.cardTypes.includes(label)}
+                onClick={() => toggle('cardTypes', label)}
+              >
+                {label}
+              </button>
             ))}
           </div>
         </fieldset>
@@ -757,9 +810,11 @@ function FilterDialog(props: {
         <fieldset className="filter-fieldset">
           <legend>Manawert</legend>
           <div className="choice-pills">
-            <button aria-pressed={!draft.cmc} onClick={() => setDraft('cmc', '')}>Alle</button>
+            <button aria-pressed={!draft.cmcs.length} onClick={() => setDraft('cmcs', [])}>
+              Alle
+            </button>
             {['0', '1', '2', '3', '4', '5', '6', '7'].map((value) => (
-              <button key={value} aria-pressed={draft.cmc === value} onClick={() => setDraft('cmc', value)}>
+              <button key={value} aria-pressed={draft.cmcs.includes(value)} onClick={() => toggle('cmcs', value)}>
                 {value === '7' ? '7+' : value}
               </button>
             ))}
@@ -769,9 +824,17 @@ function FilterDialog(props: {
         <fieldset className="filter-fieldset">
           <legend>Seltenheit</legend>
           <div className="choice-pills">
-            <button aria-pressed={!draft.rarity} onClick={() => setDraft('rarity', '')}>Alle</button>
+            <button aria-pressed={!draft.rarities.length} onClick={() => setDraft('rarities', [])}>
+              Alle
+            </button>
             {Object.entries(RARITY).map(([value, label]) => (
-              <button key={value} aria-pressed={draft.rarity === value} onClick={() => setDraft('rarity', value)}>{label}</button>
+              <button
+                key={value}
+                aria-pressed={draft.rarities.includes(value)}
+                onClick={() => toggle('rarities', value)}
+              >
+                {label}
+              </button>
             ))}
           </div>
         </fieldset>
@@ -866,6 +929,15 @@ function CardDialog(props: {
           </button>
         </div>
       )}
+      <p>
+        <a
+          href={`https://www.cardmarket.com/de/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`}
+          target="_blank"
+          rel="noopener"
+        >
+          Bei Cardmarket suchen
+        </a>
+      </p>
       {card.excluded && (
         <p className="warn">Ausgeschlossen{card.exclude_reason ? `: ${card.exclude_reason}` : ''}</p>
       )}

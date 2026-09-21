@@ -3,9 +3,10 @@ import { test } from 'node:test'
 import { parseQuery, type CardInfo } from './query.ts'
 import type { Card } from './supabase.ts'
 
-function card(fields: Partial<Card>, copies = 1): CardInfo {
+function card(fields: Partial<Card>, copies = 1, tags: string[] = []): CardInfo {
   return {
     copies,
+    tags,
     card: {
       id: 'x', oracle_id: 'o', set_code: 'blb', number: '1', name: 'Test Card', name_de: null,
       type_line: 'Creature — Otter', type_de: 'Kreatur — Otter', oracle_text: '', text_de: null,
@@ -108,4 +109,12 @@ test('is:commander finds legends and the cards that say so', () => {
   assert.ok(!hit('is:commander', plain))
   assert.ok(hit('is:commander', partner))
   assert.ok(hit('is:legendary', legend))
+})
+
+test('oracle tags come from the tag table', () => {
+  const bolt = card({ name: 'Lightning Bolt' }, 1, ['removal', 'burn'])
+  assert.ok(hit('otag:removal', bolt))
+  assert.ok(hit('tag:burn', bolt))
+  assert.ok(!hit('otag:ramp', bolt))
+  assert.ok(hit('otag:removal or otag:ramp', bolt))
 })
