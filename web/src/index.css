@@ -383,7 +383,7 @@ tr.waiting td { background: #e8a24a14; }
 .pool { position: sticky; top: 74px; max-height: calc(100dvh - 90px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 .pool .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .pool .badge { font-size: 11px; padding: 1px 6px; top: 6px; right: 6px; }
-.pool .badge.out { bottom: 6px; left: 6px; }
+.pool .badge.out { top: auto; right: auto; bottom: 6px; left: 6px; }
 /* The deck as a stack of cards: each one shows its name strip, the card under
    the pointer comes to the front. */
 .deck-stack { display: flex; flex-direction: column; margin: 4px 0 8px; }
@@ -398,15 +398,16 @@ tr.waiting td { background: #e8a24a14; }
 .stack-card:hover, .stack-card:focus-visible { z-index: 3; transform: translateY(-3px); outline: none; }
 .stack-card:hover img, .stack-card:focus-visible img { box-shadow: 0 10px 26px rgb(0 0 0 / .6); outline: 2px solid var(--brass); }
 .stack-card .badge { top: 6px; right: 8px; font-size: 12px; padding: 1px 7px; }
-.stack-card .badge.out { top: 6px; bottom: auto; left: 8px; right: auto; }
+.stack-card .badge.out { top: 6px; bottom: auto; left: auto; right: 46px; }
 .stack-card.short img { outline: 2px solid var(--warning, #e1ad55); }
 
 /* A tile adds the card, the small button next to it opens the detail view. */
 .tile-wrap { position: relative; min-width: 0; }
 .tile-wrap .tile { width: 100%; }
 .peek {
-  position: absolute; top: 8px; left: 8px; width: 30px; height: 30px; padding: 0; line-height: 1;
-  font-size: 17px; border-radius: 999px; background: rgb(21 18 15 / .82); color: var(--text);
+  position: absolute; right: 6px; bottom: 6px; width: 28px; height: 28px; min-height: 28px; padding: 0;
+  line-height: 1; font-size: 15px; border-radius: 999px; border-color: var(--brass);
+  background: rgb(21 18 15 / .86); color: var(--text);
 }
 
 .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); }
