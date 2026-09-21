@@ -15,6 +15,14 @@ import type { Card } from './supabase'
 
 export type CardInfo = { card: Card; copies: number }
 export type Predicate = (info: CardInfo) => boolean
+export type Query = { test: Predicate; unknown: string[] }
+
+/** Fields the cube knows. Anything else is reported back to the searcher. */
+export const FIELDS = new Set([
+  'name', 't', 'type', 'typ', 'o', 'oracle', 'text', 'c', 'color', 'farbe', 'id', 'identity',
+  'mv', 'cmc', 'manawert', 'r', 'rarity', 'seltenheit', 's', 'set', 'e', 'kw', 'keyword',
+  'copies', 'kopien', 'eur', 'price', 'preis', 'is',
+])
 
 const COLOR_LETTERS = 'wubrg'
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'mythic']
@@ -214,7 +222,7 @@ function parseTerm(raw: string): Predicate {
 }
 
 /** Turns the search text into a test. An empty search lets everything through. */
-export function parseQuery(input: string): Predicate {
+export function parseQuery(input: string): Query {
   const tokens = tokenize(input.trim())
   let at = 0
 
@@ -248,5 +256,14 @@ export function parseQuery(input: string): Predicate {
   }
 
   const test = parseOr()
-  return test
+  // Fields the cube does not store, e.g. "f:commander": say so instead of
+  // quietly finding nothing.
+  const unknown = [
+    ...new Set(
+      [...input.matchAll(/(?:^|[\s(-])([\wäöüß]+)(?:>=|<=|!=|[:=<>])/g)]
+        .map((match) => match[1].toLowerCase())
+        .filter((field) => !FIELDS.has(field)),
+    ),
+  ]
+  return { test, unknown }
 }

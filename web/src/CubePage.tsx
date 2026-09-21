@@ -292,6 +292,9 @@ export default function CubePage({ role }: { role: Role }) {
     [cards],
   )
 
+  // Fields the cube does not store, e.g. "f:commander".
+  const unknownFields = useMemo(() => parseQuery(text).unknown, [text])
+
   const filtered =
     Boolean(text || colors.size || rarity || cardType || cmc || keyword || setCode || showExcluded) ||
     exactColors ||
@@ -388,7 +391,7 @@ export default function CubePage({ role }: { role: Role }) {
 
     const inCube = new Set(sets.filter((s) => s.in_cube).map((s) => s.code))
     // The search understands the Scryfall style, e.g. "c:r mv<=2 -t:land".
-    const matches = parseQuery(text)
+    const query = parseQuery(text)
     const result = cards.filter(
       (c) =>
         inCube.has(c.set_code) &&
@@ -400,7 +403,7 @@ export default function CubePage({ role }: { role: Role }) {
         (!cardType || (TYPES.find(([label]) => label === cardType)?.[1].test(type(c)) ?? true)) &&
         colorsMatch(c) &&
         (!keyword || c.keywords.includes(keyword)) &&
-        matches({ card: c, copies: copies.get(c.id) ?? 0 }),
+        query.test({ card: c, copies: copies.get(c.id) ?? 0 }),
     )
     const byName = (a: Card, b: Card) => name(a).localeCompare(name(b), 'de')
     const sorters: Record<string, (a: Card, b: Card) => number> = {
@@ -530,6 +533,12 @@ export default function CubePage({ role }: { role: Role }) {
           )}
         </span>
       </div>
+      {unknownFields.length > 0 && (
+        <p className="warn notice">
+          Die Suche kennt {unknownFields.map((field) => `${field}:`).join(', ')} nicht. Mögliche Felder
+          stehen unter „Suchhilfe“.
+        </p>
+      )}
       {showHelp && (
         <div className="search-help">
           <p>Wörter ohne Doppelpunkt suchen in Name, Typ und Kartentext.</p>

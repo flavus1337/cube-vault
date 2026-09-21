@@ -16,7 +16,7 @@ function card(fields: Partial<Card>, copies = 1): CardInfo {
   }
 }
 
-const hit = (query: string, info: CardInfo) => parseQuery(query)(info)
+const hit = (query: string, info: CardInfo) => parseQuery(query).test(info)
 
 test('plain words look at name, type and rules text', () => {
   const otter = card({ name_de: 'Sturmspalterin', text_de: 'Verursacht Trampelschaden' })
@@ -80,4 +80,9 @@ test('keywords and an empty search', () => {
   assert.ok(!hit('kw:trample', flyer))
   assert.ok(hit('', flyer))
   assert.ok(hit('   ', flyer))
+})
+
+test('unknown fields are reported', () => {
+  assert.deepEqual(parseQuery('id:bg f:commander t:verzauberung').unknown, ['f'])
+  assert.deepEqual(parseQuery('c:r mv<=2').unknown, [])
 })
