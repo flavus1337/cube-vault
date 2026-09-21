@@ -118,6 +118,7 @@ export function SetsPage({ role }: { role: Role }) {
   const [code, setCode] = useState('')
   const [progress, setProgress] = useState('')
   const [importing, setImporting] = useState(false)
+  const [linking, setLinking] = useState(false)
   const editable = canEdit(role)
 
   const load = useCallback(() => {
@@ -148,6 +149,46 @@ export function SetsPage({ role }: { role: Role }) {
   useEffect(() => {
     load()
   }, [load])
+
+  /** Bonus sheets belong to a main set; Scryfall knows it for most of them. */
+  async function linkParents() {
+    setLinking(true)
+    setProgress('Zuordnung bei Scryfall holen …')
+    try {
+      const known = new Set((sets ?? []).map((set) => set.code))
+      let linked = 0
+      for (const set of (sets ?? []).filter((set) => !set.parent_code)) {
+        const res = await fetch(`https://api.scryfall.com/sets/${set.code}`, {
+          headers: { Accept: 'application/json' },
+        })
+        if (!res.ok) continue
+        const parent = (await res.json()).parent_set_code as string | undefined
+        if (!parent || !known.has(parent)) continue
+        const { error } = await supabase.from('sets').update({ parent_code: parent }).eq('code', set.code)
+        if (error) throw error
+        linked++
+      }
+      setProgress(
+        linked
+          ? `Fertig: ${linked} Sets zugeordnet.`
+          : 'Scryfall kennt für die übrigen Sets kein Hauptset. Setze es von Hand.',
+      )
+      load()
+    } catch (e) {
+      setProgress(`Zuordnung fehlgeschlagen: ${(e as Error).message}`)
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  async function setParent(set: CubeSet, parent: string) {
+    const { error } = await supabase
+      .from('sets')
+      .update({ parent_code: parent || null })
+      .eq('code', set.code)
+    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    load()
+  }
 
   async function toggle(set: CubeSet) {
     const { error } = await supabase.from('sets').update({ in_cube: !set.in_cube }).eq('code', set.code)
@@ -190,6 +231,9 @@ export function SetsPage({ role }: { role: Role }) {
           <button className="primary" disabled={importing || !code.trim()}>
             Ganzes Set laden
           </button>
+          <button type="button" disabled={linking} onClick={linkParents}>
+            {linking ? 'wird zugeordnet …' : 'Zuordnung von Scryfall holen'}
+          </button>
           {progress && <p className="muted progress">{progress}</p>}
         </form>
       )}
@@ -223,7 +267,27 @@ export function SetsPage({ role }: { role: Role }) {
                     </span>
                   </td>
                   <td>{s.code.toUpperCase()}</td>
-                  <td>{sets.find((p) => p.code === s.parent_code)?.name ?? (s.parent_code ?? '—')}</td>
+                  <td>
+                    {editable ? (
+                      <select
+                        id={`parent-${s.code}`}
+                        aria-label={`Hauptset von ${s.name}`}
+                        value={s.parent_code ?? ''}
+                        onChange={(e) => setParent(s, e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {sets
+                          .filter((p) => p.code !== s.code)
+                          .map((p) => (
+                            <option key={p.code} value={p.code}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      (sets.find((p) => p.code === s.parent_code)?.name ?? s.parent_code ?? '—')
+                    )}
+                  </td>
                   <td className="nowrap">{s.released_at && new Date(s.released_at).toLocaleDateString('de-DE')}</td>
                   <td className="num">{owned.get(s.code) ?? 0}</td>
                   <td className="num">{counts.get(s.code) ?? 0}</td>
