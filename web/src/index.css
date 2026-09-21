@@ -43,7 +43,24 @@ button:not(:disabled):hover, button:not(:disabled):focus-visible,
 select:hover, select:focus-visible, input:hover, input:focus-visible { border-color: var(--brass); }
 button.primary:not(:disabled):hover, button.primary:not(:disabled):focus-visible { background: var(--accent-hover); border-color: var(--accent-hover); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-input[type='checkbox'] { width: 18px; height: 18px; min-height: auto; padding: 0; accent-color: var(--accent); }
+/* Boxes and radios in the cube's own look instead of the browser default. */
+input[type='checkbox'], input[type='radio'] {
+  appearance: none; flex: none; width: 20px; height: 20px; min-height: 20px; margin: 0; padding: 0;
+  display: inline-grid; place-content: center; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel-raised);
+  transition: background .12s ease, border-color .12s ease;
+}
+input[type='radio'] { border-radius: 50%; }
+input[type='checkbox']:hover, input[type='radio']:hover { border-color: var(--brass); }
+input[type='checkbox']:checked, input[type='radio']:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+input[type='checkbox']:checked::before {
+  content: ''; width: 6px; height: 11px; margin-top: -2px;
+  border: solid var(--ink); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+input[type='radio']:checked::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cursor: not-allowed; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -92,7 +109,13 @@ input[type='checkbox'] { width: 18px; height: 18px; min-height: auto; padding: 0
 .toolbar input[type='search'] { flex: 1 1 220px; min-width: 0; }
 .toolbar select { max-width: 190px; }
 .toolbar #filters { white-space: nowrap; }
-.check { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.check {
+  min-height: 44px; display: inline-flex; align-items: center; gap: 9px; white-space: nowrap;
+  padding: 6px 12px 6px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel-raised); cursor: pointer;
+}
+.check:hover { border-color: var(--brass); }
+.check:has(input:checked) { border-color: var(--accent); color: var(--text); }
 .summary { margin: 12px 2px 18px; font-variant-numeric: tabular-nums; }
 .status { color: var(--muted); text-align: center; padding: 48px 16px; border-block: 1px solid var(--line); }
 
@@ -150,17 +173,20 @@ dialog.filter-dialog::backdrop { background: rgb(9 7 6 / .72); backdrop-filter: 
 }
 .radio-list label:last-of-type { border-bottom: 0; }
 .radio-list label:hover, .radio-list label:focus-within { background: rgb(184 144 90 / .09); }
-.radio-list input[type='radio'] {
-  flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px; margin: 0; padding: 0;
-  border: 0; accent-color: var(--accent);
-}
+.radio-list label:has(input:checked) { background: rgb(224 112 58 / .12); }
 .radio-list small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .06em; }
 .option-empty, .option-hint { margin: 0; padding: 10px; font-size: 13px; }
 .option-hint { padding: 0; }
 .choice-pills { display: flex; flex-wrap: wrap; gap: 7px; }
-.choice-pills button, .filter-toggles button { min-width: 44px; min-height: 44px; padding: 8px 12px; }
+.choice-pills button, .filter-toggles button {
+  min-width: 44px; min-height: 44px; padding: 8px 14px; border-radius: 999px;
+}
+.choice-pills button:hover, .filter-toggles button:hover { border-color: var(--brass); }
 .choice-pills button[aria-pressed='true'], .filter-toggles button[aria-pressed='true'] {
-  color: var(--ink); background: var(--brass); border-color: var(--brass); font-weight: 750;
+  color: var(--ink); background: var(--accent); border-color: var(--accent); font-weight: 750;
+}
+.choice-pills button[aria-pressed='true']:hover, .filter-toggles button[aria-pressed='true']:hover {
+  background: var(--accent-hover); border-color: var(--accent-hover);
 }
 .filter-toggles { display: grid; gap: 8px; }
 .filter-toggles button { width: 100%; text-align: left; }
