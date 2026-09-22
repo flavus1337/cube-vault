@@ -824,7 +824,9 @@ function CardDialog(props: {
       finish: row.finish ?? 'nonfoil',
       qty: row.qty,
       label: row.lang.toUpperCase(),
-      price: row.price_eur ?? card.price_eur,
+      /* The card price is the plain one of the main printing, so it stands in
+         only for plain copies. A foil keeps its own price or shows none. */
+      price: row.price_eur ?? (row.finish === 'foil' || row.finish === 'etched' ? null : card.price_eur),
     }))
 
   return (

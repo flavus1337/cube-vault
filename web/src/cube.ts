@@ -25,21 +25,26 @@ const groupPrints = (rows: Copy[]) => {
 type Store = { lastEvent: number; cards: Card[]; sets: CubeSet[]; copies: Copy[]; tags: CardTag[] }
 const empty: Store = { lastEvent: 0, cards: [], sets: [], copies: [], tags: [] }
 
-/* The cube for every page that shows it. The cards come from localStorage and
-   only the events since the last visit are fetched, which keeps a visit at a
-   few kilobytes instead of about 2 MB. */
+/* Kept outside the hook, so moving from the cube to the decks and back shows
+   the cards at once instead of loading them again. */
+let shared: Store = empty
+
+/* The cube for every page that shows it. The cards come from the browser's
+   own database and only the events since the last visit are fetched, which
+   keeps a visit at a few kilobytes instead of a few megabytes. */
 export function useCube() {
-  const [store, setStore] = useState<Store>(() => readCache() ?? empty)
-  const [loading, setLoading] = useState(() => !readCache())
+  const [store, setStore] = useState<Store>(shared)
+  const [loading, setLoading] = useState(!shared.cards.length)
   const [error, setError] = useState<string | null>(null)
-  const live = useRef<Store>(store)
+  const live = useRef<Store>(shared)
 
   function apply(next: Store) {
     live.current = next
+    shared = next
     setStore(next)
     setError(null)
     setLoading(false)
-    writeCache(next)
+    void writeCache(next)
   }
 
   useEffect(() => {
@@ -97,9 +102,22 @@ export function useCube() {
       })
     }
 
-    // The cached cube is already on screen; only the events since then matter.
-    if (live.current.cards.length) catchUp()
-    else loadAll()
+    /* Already in memory from another page: only the events since then matter.
+       Otherwise the browser's copy is read first, and only a cold start or an
+       old copy asks for every card. */
+    if (live.current.cards.length) {
+      catchUp()
+    } else {
+      readCache().then((cached) => {
+        if (stop) return
+        if (cached) {
+          apply(cached)
+          catchUp()
+        } else {
+          loadAll()
+        }
+      })
+    }
     const timer = setInterval(catchUp, 15000)
     return () => {
       stop = true

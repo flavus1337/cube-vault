@@ -206,7 +206,7 @@ export function CopyRows(props: {
           <span>
             {finishLabel(row.finish)}
             {row.label && <span className="muted"> · {row.label}</span>}
-            {row.price != null && <span className="muted"> · {euro(row.price)}</span>}
+            <span className="muted"> · {row.price != null ? euro(row.price) : 'Preis offen'}</span>
           </span>
           <span className="copies">
             <button

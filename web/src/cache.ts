@@ -1,11 +1,15 @@
 import type { CardTag } from './tags'
 import type { Card, Copy, CubeSet, PrivateCard } from './supabase'
 
-/* The cube is about 2 MB of cards that hardly ever change. Keeping them in
-   localStorage means a visit only asks for the events since the last one.
-   Card rows and prices are written without an event, so the copy expires. */
-// v2: copies carry a finish since migration 0010, older copies are dropped.
-const KEY = 'cube-cards-v2'
+/* The cube is a few megabytes of cards that hardly ever change. It lives in
+   IndexedDB, not in localStorage: that one holds about 5 MB per site and threw
+   the whole cube away once it was full. A visit then only asks for the events
+   since the last one. Card rows and prices are written without an event, so
+   the copy expires after a while. */
+const DB = 'cube-vault'
+const STORE = 'cube'
+// v3: the cube moved out of localStorage; older copies are ignored.
+const KEY = 'cube-v3'
 const MAX_AGE = 6 * 60 * 60 * 1000
 
 export type CubeCache = {
@@ -17,29 +21,47 @@ export type CubeCache = {
   tags: CardTag[]
 }
 
-export function readCache(): CubeCache | null {
+function open(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB, 1)
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE)
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest): Promise<T> {
+  return open().then(
+    (db) =>
+      new Promise<T>((resolve, reject) => {
+        const request = work(db.transaction(STORE, mode).objectStore(STORE))
+        request.onsuccess = () => resolve(request.result as T)
+        request.onerror = () => reject(request.error)
+      }),
+  )
+}
+
+export async function readCache(): Promise<CubeCache | null> {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return null
-    const cache = JSON.parse(raw) as CubeCache
-    if (Date.now() - cache.at > MAX_AGE) return null
+    const cache = await run<CubeCache | undefined>('readonly', (store) => store.get(KEY))
+    if (!cache || Date.now() - cache.at > MAX_AGE) return null
     return cache.cards?.length ? cache : null
   } catch {
     return null
   }
 }
 
-export function writeCache(cache: Omit<CubeCache, 'at'>) {
+export async function writeCache(cache: Omit<CubeCache, 'at'>) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...cache, at: Date.now() }))
+    await run('readwrite', (store) => store.put({ ...cache, at: Date.now() }, KEY))
   } catch {
-    // No space or no storage at all: the page just fetches everything again.
+    // No storage at all: the page just fetches everything again.
   }
 }
 
-export function clearCache() {
+export async function clearCache() {
   try {
-    localStorage.removeItem(KEY)
+    await run('readwrite', (store) => store.delete(KEY))
   } catch {
     // nothing to do
   }
