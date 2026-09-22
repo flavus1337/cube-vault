@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
-import { finishLabel, summary } from './format'
+import { euro, finishLabel, summary } from './format'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 import { privateCardFrom, type Version } from './versions'
@@ -191,11 +191,12 @@ function CardDialog(props: {
 }) {
   const { card, rows, owned, onChange, onAddVersion, onClose } = props
   const copies = rows.reduce((sum, row) => sum + row.qty, 0)
+  const value = rows.reduce((sum, row) => sum + row.qty * (row.price_eur ?? 0), 0)
 
   return (
     <CardDetail
       card={card}
-      note={`${copies}× vorhanden`}
+      note={`${copies}× vorhanden · ${euro(value)}`}
       ownedPrints={owned.flatMap((row) => [row.print_id, `${row.set_code}/${row.number}`])}
       ownedLabel="bei dir"
       onAddVersion={onAddVersion}

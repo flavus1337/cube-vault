@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
 import { useCube } from './cube'
-import { RARITY, summary } from './format'
+import { euro, RARITY, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { loadTags } from './tags'
@@ -829,10 +829,16 @@ function CardDialog(props: {
       price: row.price_eur ?? (row.finish === 'foil' || row.finish === 'etched' ? null : card.price_eur),
     }))
 
+  // What the copies are worth together, each stack with its own price.
+  const value = prints.reduce(
+    (sum, row) => sum + row.qty * (row.price_eur ?? (row.finish === 'nonfoil' ? (card.price_eur ?? 0) : 0)),
+    0,
+  )
+
   return (
     <CardDetail
       card={card}
-      note={`${copies}× gescannt`}
+      note={`${copies}× gescannt${copies ? ` · ${euro(value)}` : ''}`}
       onClose={onClose}
       ownedPrints={[
         ...prints.map((row) => row.print_id),
