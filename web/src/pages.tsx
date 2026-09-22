@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { downloadBackup } from './backup'
 import { importSet } from './importSet'
 import {
   canEdit,
@@ -110,6 +111,7 @@ export function HistoryPage() {
 }
 
 export function SetsPage({ role }: { role: Role }) {
+  const [saving, setSaving] = useState(false)
   const [sets, setSets] = useState<CubeSet[] | null>(null)
   const [counts, setCounts] = useState<Map<string, number>>(new Map())
   // Per set: how many of its cards have at least one scanned copy.
@@ -233,6 +235,23 @@ export function SetsPage({ role }: { role: Role }) {
           </button>
           <button type="button" disabled={linking} onClick={linkParents}>
             {linking ? 'wird zugeordnet …' : 'Zuordnung von Scryfall holen'}
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            title="Lädt Sets, Karten, Kopien, Schlagwörter, deine eigenen Karten, Decks und den Verlauf als JSON-Datei"
+            onClick={async () => {
+              setSaving(true)
+              try {
+                await downloadBackup(setProgress)
+              } catch (e) {
+                setProgress(`Backup fehlgeschlagen: ${(e as Error).message}`)
+              } finally {
+                setSaving(false)
+              }
+            }}
+          >
+            {saving ? 'Backup läuft …' : 'Backup herunterladen'}
           </button>
           {progress && <p className="muted progress">{progress}</p>}
         </form>
