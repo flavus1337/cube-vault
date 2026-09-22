@@ -102,7 +102,14 @@ export default function StatsPage() {
   const { rows, missing } = useMemo(() => {
     if (source === 'mine') {
       // Own cards are cards you have, so nothing can be missing here.
-      return { rows: mine?.map(privateRow) ?? null, missing: null }
+      // Foil and normal of the same printing are one card here.
+      const piles = new Map<string, Row>()
+      for (const card of mine ?? []) {
+        const seen = piles.get(card.print_id)
+        if (seen) seen.qty += card.qty
+        else piles.set(card.print_id, privateRow(card))
+      }
+      return { rows: mine ? [...piles.values()] : null, missing: null }
     }
     if (cube.loading) return { rows: null, missing: null }
     const inCube = new Set(cube.sets.filter((s) => s.in_cube).map((s) => s.code))

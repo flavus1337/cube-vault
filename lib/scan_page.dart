@@ -24,6 +24,13 @@ typedef _Found = ({
   bool confirmed,
 });
 
+/// Finish of a scanned copy: value, label and the icon on the chip.
+const _finishes = <(String, String, IconData)>[
+  ('nonfoil', 'Normal', Icons.crop_portrait),
+  ('foil', 'Foil', Icons.auto_awesome),
+  ('etched', 'Etched', Icons.brush),
+];
+
 class ScanPage extends StatefulWidget {
   /// Only editors and admins may scan into the cube. Everyone else collects
   /// into their own cards.
@@ -54,6 +61,9 @@ class _ScanPageState extends State<ScanPage> {
   Set<String> _knownSets = const {};
   // Off: every scan goes into the cube. On: into the player's own cards.
   late bool _privateMode = !widget.canEdit;
+  /* Foil, etched foil or plain. Stays set until you change it, so a pile of
+     foils goes in one after the other. Each finish is counted on its own. */
+  String _finish = 'nonfoil';
 
   _Found? _last;
   // The card just counted. It counts again only after the camera saw nothing
@@ -276,8 +286,13 @@ class _ScanPageState extends State<ScanPage> {
     final int qty;
     try {
       qty = _privateMode
-          ? await Db.addPrivateCopy(card)
-          : await Db.addCopy(found.printId, card['id'] as String, found.lang);
+          ? await Db.addPrivateCopy({...card, 'finish': _finish})
+          : await Db.addCopy(
+              found.printId,
+              card['id'] as String,
+              found.lang,
+              _finish,
+            );
     } catch (e) {
       debugPrint('save ${hit.key} failed: $e');
       if (mounted) {
@@ -571,8 +586,26 @@ class _ScanPageState extends State<ScanPage> {
           ],
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
+          preferredSize: const Size.fromHeight(104),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final option in _finishes)
+                      ChoiceChip(
+                        label: Text(option.$2),
+                        avatar: Icon(option.$3, size: 18),
+                        selected: _finish == option.$1,
+                        onSelected: (_) => setState(() => _finish = option.$1),
+                      ),
+                  ],
+                ),
+              ),
+          Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: SegmentedButton<bool>(
               segments: [
@@ -598,6 +631,8 @@ class _ScanPageState extends State<ScanPage> {
                 _added = 0;
               }),
             ),
+          ),
+            ],
           ),
         ),
       ),
@@ -777,11 +812,15 @@ class _ScanPageState extends State<ScanPage> {
                                   icon: const Icon(Icons.undo),
                                   onPressed: () async {
                                     if (_privateMode) {
-                                      await Db.removePrivateCopy(last.printId);
+                                      await Db.removePrivateCopy(
+                                        last.printId,
+                                        _finish,
+                                      );
                                     } else {
                                       await Db.removeCopy(
                                         last.printId,
                                         lastCard['id'] as String,
+                                        _finish,
                                       );
                                     }
                                     setState(() {
@@ -802,11 +841,15 @@ class _ScanPageState extends State<ScanPage> {
                                   icon: const Icon(Icons.add),
                                   onPressed: () async {
                                     final qty = _privateMode
-                                        ? await Db.addPrivateCopy(lastCard)
+                                        ? await Db.addPrivateCopy({
+                                            ...lastCard,
+                                            'finish': _finish,
+                                          })
                                         : await Db.addCopy(
                                             last.printId,
                                             lastCard['id'] as String,
                                             last.lang,
+                                            _finish,
                                           );
                                     setState(() => _added++);
                                     _showAdded(lastCard, qty);

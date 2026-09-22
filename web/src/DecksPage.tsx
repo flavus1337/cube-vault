@@ -188,7 +188,16 @@ export default function DecksPage() {
     }
   }, [])
 
-  const mine = useMemo(() => privateCards.map(fromPrivate), [privateCards])
+  const mine = useMemo(() => {
+    // A deck does not care about the finish, so foil and normal are one pile.
+    const byPrint = new Map<string, PoolCard>()
+    for (const row of privateCards) {
+      const seen = byPrint.get(row.print_id)
+      if (seen) seen.owned += row.qty
+      else byPrint.set(row.print_id, fromPrivate(row))
+    }
+    return [...byPrint.values()]
+  }, [privateCards])
   const cube = useMemo(() => {
     const inCube = new Set(cubeData.sets.filter((s) => s.in_cube).map((s) => s.code))
     return cubeData.cards

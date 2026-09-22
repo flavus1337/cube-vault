@@ -172,48 +172,73 @@ class Db {
   /// Takes one copy back. For a cube card the print with the most copies is used.
   static Future<void> undoScan(Map<String, Object?> scan) async {
     if (scan['kind'] == 'private') {
-      await removePrivateCopy('${scan['print_id']}');
+      await removePrivateCopy(
+        '${scan['print_id']}',
+        '${scan['finish'] ?? 'nonfoil'}',
+      );
       return;
     }
     final cardId = '${scan['card_id'] ?? scan['id']}';
     final prints = await _sb
         .from('copies')
-        .select('print_id')
+        .select('print_id, finish')
         .eq('card_id', cardId)
         .order('qty', ascending: false)
         .limit(1);
     if (prints.isEmpty) return;
-    await removeCopy('${prints.first['print_id']}', cardId);
+    await removeCopy(
+      '${prints.first['print_id']}',
+      cardId,
+      '${prints.first['finish']}',
+    );
   }
 
   /// Cards a player keeps outside the cube. Only the owner can read them.
+  /// The finish ('nonfoil', 'foil', 'etched') is part of the card map.
   static Future<int> addPrivateCopy(Map<String, Object?> card) async =>
       await _sb.rpc('add_private_copy', params: {'card': card}) as int;
 
-  static Future<int> removePrivateCopy(String printId) async =>
-      await _sb.rpc('remove_private_copy', params: {'p_print_id': printId})
+  static Future<int> removePrivateCopy(
+    String printId, [
+    String finish = 'nonfoil',
+  ]) async =>
+      await _sb.rpc(
+            'remove_private_copy',
+            params: {'p_print_id': printId, 'p_finish': finish},
+          )
           as int;
 
-  /// Both return how many copies of the card exist afterwards.
+  /// Both return how many copies of the card exist afterwards. A foil is its
+  /// own stack, so it does not turn the copies you already have into foils.
   static Future<int> addCopy(
     String printId,
     String cardId,
-    String lang,
-  ) async =>
+    String lang, [
+    String finish = 'nonfoil',
+  ]) async =>
       await _sb.rpc(
             'add_copy',
             params: {
               'p_print_id': printId,
               'p_card_id': cardId,
               'p_lang': lang,
+              'p_finish': finish,
             },
           )
           as int;
 
-  static Future<int> removeCopy(String printId, String cardId) async =>
+  static Future<int> removeCopy(
+    String printId,
+    String cardId, [
+    String finish = 'nonfoil',
+  ]) async =>
       await _sb.rpc(
             'remove_copy',
-            params: {'p_print_id': printId, 'p_card_id': cardId},
+            params: {
+              'p_print_id': printId,
+              'p_card_id': cardId,
+              'p_finish': finish,
+            },
           )
           as int;
 }

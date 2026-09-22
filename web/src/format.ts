@@ -22,3 +22,13 @@ export const png = (url: string) => url.replace('/normal/', '/png/').replace('.j
 
 export const cardmarket = (name: string) =>
   `https://www.cardmarket.com/de/Magic/Products/Search?searchString=${encodeURIComponent(name)}`
+
+/** The finishes a card can be printed in, in the order they are offered. */
+export const FINISHES: [string, string][] = [
+  ['nonfoil', 'Normal'],
+  ['foil', 'Foil'],
+  ['etched', 'Etched Foil'],
+]
+
+export const finishLabel = (finish: string) =>
+  FINISHES.find(([key]) => key === finish)?.[1] ?? finish

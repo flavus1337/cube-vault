@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
-import CardDetail from './CardDetail'
-import { summary } from './format'
+import CardDetail, { CopyRows } from './CardDetail'
+import { finishLabel, summary } from './format'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 
+const key = (c: PrivateCard) => `${c.print_id}-${c.finish}`
 const name = (c: PrivateCard) => c.name_de || c.name
 const type = (c: PrivateCard) => c.type_de || c.type_line
 
@@ -52,9 +53,11 @@ export default function MyCardsPage() {
     }
   }, [])
 
-  async function change(card: PrivateCard, delta: number) {
+  async function change(card: PrivateCard, delta: number, finish = card.finish) {
     const { error } = await supabase.rpc(delta > 0 ? 'add_private_copy' : 'remove_private_copy', {
-      ...(delta > 0 ? { card: { ...card, owner: undefined, qty: undefined, added_at: undefined } } : { p_print_id: card.print_id }),
+      ...(delta > 0
+        ? { card: { ...card, finish, owner: undefined, qty: undefined, added_at: undefined } }
+        : { p_print_id: card.print_id, p_finish: finish }),
     })
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
     load(true)
@@ -67,7 +70,11 @@ export default function MyCardsPage() {
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
   }, [cards, text])
 
-  const selected = cards.find((c) => c.print_id === selectedId) ?? null
+  const selected = cards.find((c) => key(c) === selectedId) ?? null
+  // Every finish of a printing is its own stack.
+  const sameCard = selected
+    ? cards.filter((c) => c.print_id === selected.print_id)
+    : []
   const copies = list.reduce((sum, c) => sum + c.qty, 0)
   const value = list.reduce((sum, c) => sum + (c.price_eur ?? 0) * c.qty, 0)
 
@@ -118,12 +125,12 @@ export default function MyCardsPage() {
       ) : (
         <div className="grid">
           {list.map((c) => (
-            <div key={c.print_id} className="tile private">
+            <div key={key(c)} className="tile private">
               <button
                 className="tile-open"
                 title={`${name(c)} — ${type(c)}`}
                 aria-label={`${name(c)} ansehen`}
-                onClick={() => setSelectedId(c.print_id)}
+                onClick={() => setSelectedId(key(c))}
               >
                 {c.image ? (
                   <img src={c.image} alt={name(c)} loading="lazy" />
@@ -132,6 +139,7 @@ export default function MyCardsPage() {
                 )}
               </button>
               <span className="badge">{c.qty}×</span>
+              {c.finish !== 'nonfoil' && <span className="badge out">{finishLabel(c.finish)}</span>}
               <div className="copies">
                 <button aria-label={`Eine Kopie von ${name(c)} weniger`} onClick={() => change(c, -1)}>
                   −
@@ -147,9 +155,10 @@ export default function MyCardsPage() {
 
       {selected && (
         <CardDialog
-          key={selected.print_id}
+          key={key(selected)}
           card={selected}
-          onChange={(delta) => change(selected, delta)}
+          rows={sameCard}
+          onChange={(delta, finish) => change(selected, delta, finish)}
           onClose={() => setSelectedId(null)}
         />
       )}
@@ -160,29 +169,20 @@ export default function MyCardsPage() {
 /* Own cards carry no rules text, the scanner does not keep it. */
 function CardDialog(props: {
   card: PrivateCard
-  onChange: (delta: number) => Promise<void>
+  rows: PrivateCard[]
+  onChange: (delta: number, finish: string) => Promise<void>
   onClose: () => void
 }) {
-  const { card, onChange, onClose } = props
-  const [busy, setBusy] = useState(false)
-
-  async function step(delta: number) {
-    setBusy(true)
-    await onChange(delta)
-    setBusy(false)
-  }
+  const { card, rows, onChange, onClose } = props
+  const copies = rows.reduce((sum, row) => sum + row.qty, 0)
 
   return (
-    <CardDetail card={card} note={`${card.qty}× vorhanden`} onClose={onClose}>
-      <div className="copies">
-        <button disabled={busy || card.qty === 0} onClick={() => step(-1)} aria-label="Eine Kopie weniger">
-          −
-        </button>
-        <strong>{card.qty}</strong>
-        <button disabled={busy} onClick={() => step(1)} aria-label="Eine Kopie mehr">
-          +
-        </button>
-      </div>
+    <CardDetail card={card} note={`${copies}× vorhanden`} onClose={onClose}>
+      <CopyRows
+        rows={rows.map((row) => ({ print_id: row.print_id, finish: row.finish, qty: row.qty }))}
+        onChange={(_print, finish, delta) => onChange(delta, finish)}
+        onAdd={(finish) => onChange(1, finish)}
+      />
     </CardDetail>
   )
 }

@@ -73,6 +73,7 @@ async function basicLand(colour: string): Promise<PrivateCard> {
     image: card.image_uris?.normal ?? null,
     price_eur: null,
     lang: 'de',
+    finish: 'nonfoil',
     qty: 1,
     added_at: new Date().toISOString(),
   }

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
-import CardDetail from './CardDetail'
+import CardDetail, { CopyRows } from './CardDetail'
 import { useCube } from './cube'
 import { RARITY, summary } from './format'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { loadTags } from './tags'
-import { canEdit, supabase, type Card, type CubeSet, type Role } from './supabase'
+import { canEdit, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
 const COLOR_LABELS: Record<string, string> = {
@@ -353,14 +353,17 @@ export default function CubePage({ role }: { role: Role }) {
   )
 
   // Editors change the number of scanned copies right here.
-  async function changeCopies(card: Card, delta: number) {
+  /* [printId] and [finish] say which stack changes: the foil of a printing is
+     counted on its own, next to the normal copies. */
+  async function changeCopies(card: Card, delta: number, printId?: string, finish = 'nonfoil') {
     const known = prints.get(card.id) ?? []
-    const printId = known[0]?.print_id ?? card.id
+    const id = printId ?? known[0]?.print_id ?? card.id
     const { error } = await supabase.rpc(delta > 0 ? 'add_copy' : 'remove_copy', {
-      p_print_id: printId,
+      p_print_id: id,
       p_card_id: card.id,
       p_source: 'web', // the history says where a change came from
-      ...(delta > 0 ? { p_lang: known[0]?.lang ?? 'en' } : {}),
+      p_finish: finish,
+      ...(delta > 0 ? { p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en' } : {}),
     })
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
     await reloadCopies()
@@ -548,8 +551,9 @@ export default function CubePage({ role }: { role: Role }) {
           key={selected.id}
           card={selected}
           copies={copies.get(selected.id) ?? 0}
+          prints={prints.get(selected.id) ?? []}
           editable={canEdit(role)}
-          onChangeCopies={(delta) => changeCopies(selected, delta)}
+          onChangeCopies={(delta, printId, finish) => changeCopies(selected, delta, printId, finish)}
           onToggleExcluded={() => toggleExcluded(selected)}
           onClose={() => setSelected(null)}
         />
@@ -784,25 +788,32 @@ function FilterDialog(props: {
 function CardDialog(props: {
   card: Card
   copies: number
+  prints: Copy[]
   editable: boolean
-  onChangeCopies: (delta: number) => Promise<void>
+  onChangeCopies: (delta: number, printId?: string, finish?: string) => Promise<void>
   onToggleExcluded: () => void
   onClose: () => void
 }) {
-  const { card, copies, editable, onChangeCopies, onToggleExcluded, onClose } = props
-  const [busy, setBusy] = useState(false)
+  const { card, copies, prints, editable, onChangeCopies, onToggleExcluded, onClose } = props
 
-  async function change(delta: number) {
-    setBusy(true)
-    await onChangeCopies(delta)
-    setBusy(false)
-  }
+  const rows = [...prints]
+    .sort((a, b) => a.finish.localeCompare(b.finish) || a.lang.localeCompare(b.lang))
+    .map((row) => ({
+      print_id: row.print_id,
+      finish: row.finish,
+      qty: row.qty,
+      label: row.lang.toUpperCase(),
+    }))
 
   return (
     <CardDetail
       card={card}
       note={`${copies}× gescannt`}
       onClose={onClose}
+      ownedPrints={prints.map((row) => row.print_id)}
+      onAddVersion={
+        editable ? (version, finish) => onChangeCopies(1, version.id, finish) : undefined
+      }
       actions={
         editable ? (
           <button onClick={onToggleExcluded}>{card.excluded ? 'Wieder aufnehmen' : 'Ausschließen'}</button>
@@ -810,15 +821,11 @@ function CardDialog(props: {
       }
     >
       {editable && (
-        <div className="copies">
-          <button id="fewer" disabled={busy || copies === 0} onClick={() => change(-1)} aria-label="Eine Kopie weniger">
-            −
-          </button>
-          <strong>{copies}</strong>
-          <button id="more" disabled={busy} onClick={() => change(1)} aria-label="Eine Kopie mehr">
-            +
-          </button>
-        </div>
+        <CopyRows
+          rows={rows.length ? rows : [{ print_id: card.id, finish: 'nonfoil', qty: 0 }]}
+          onChange={(printId, finish, delta) => onChangeCopies(delta, printId, finish)}
+          onAdd={(finish) => onChangeCopies(1, rows[0]?.print_id ?? card.id, finish)}
+        />
       )}
       {card.excluded && (
         <p className="warn">Ausgeschlossen{card.exclude_reason ? `: ${card.exclude_reason}` : ''}</p>

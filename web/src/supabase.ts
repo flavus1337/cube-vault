@@ -57,7 +57,8 @@ export type Card = {
   exclude_reason: string | null
 }
 
-export type Copy = { print_id: string; card_id: string; lang: string; qty: number }
+/** One stack of the same print in the same finish: 'nonfoil', 'foil' or 'etched'. */
+export type Copy = { print_id: string; card_id: string; lang: string; qty: number; finish: string }
 
 export type CardEvent = {
   id: number
@@ -105,6 +106,7 @@ export type PrivateCard = {
   image: string | null
   price_eur: number | null
   lang: string
+  finish: string
   qty: number
   added_at: string
 }
