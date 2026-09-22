@@ -4,6 +4,7 @@ import CardDetail, { CopyRows } from './CardDetail'
 import { finishLabel, summary } from './format'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
+import { privateCardFrom, type Version } from './versions'
 
 const key = (c: PrivateCard) => `${c.print_id}-${c.finish}`
 const name = (c: PrivateCard) => c.name_de || c.name
@@ -52,6 +53,14 @@ export default function MyCardsPage() {
       stop = true
     }
   }, [])
+
+  /* A printing from the version list: Scryfall gives the card, the database
+     puts it next to the ones you scanned. */
+  async function addVersion(row: Record<string, unknown>) {
+    const { error } = await supabase.rpc('add_private_copy', { card: row })
+    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    load(true)
+  }
 
   async function change(card: PrivateCard, delta: number, finish = card.finish) {
     const { error } = await supabase.rpc(delta > 0 ? 'add_private_copy' : 'remove_private_copy', {
@@ -158,7 +167,11 @@ export default function MyCardsPage() {
           key={key(selected)}
           card={selected}
           rows={sameCard}
+          owned={cards}
           onChange={(delta, finish) => change(selected, delta, finish)}
+          onAddVersion={async (version, finish) =>
+            addVersion(await privateCardFrom(version, finish))
+          }
           onClose={() => setSelectedId(null)}
         />
       )}
@@ -170,18 +183,22 @@ export default function MyCardsPage() {
 function CardDialog(props: {
   card: PrivateCard
   rows: PrivateCard[]
+  /** All your cards, so the version list can mark the ones you have. */
+  owned: PrivateCard[]
   onChange: (delta: number, finish: string) => Promise<void>
+  onAddVersion: (version: Version, finish: string) => Promise<void>
   onClose: () => void
 }) {
-  const { card, rows, onChange, onClose } = props
+  const { card, rows, owned, onChange, onAddVersion, onClose } = props
   const copies = rows.reduce((sum, row) => sum + row.qty, 0)
 
   return (
     <CardDetail
       card={card}
       note={`${copies}× vorhanden`}
-      ownedPrints={[card.print_id]}
+      ownedPrints={owned.flatMap((row) => [row.print_id, `${row.set_code}/${row.number}`])}
       ownedLabel="bei dir"
+      onAddVersion={onAddVersion}
       onClose={onClose}
     >
       <CopyRows

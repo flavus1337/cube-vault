@@ -1,6 +1,8 @@
 /* Every printing of a card, from Scryfall. Used in the detail view to show
    which version you own and what else exists. */
 
+type Json = Record<string, unknown>
+
 export type Version = {
   id: string
   set: string
@@ -16,6 +18,8 @@ export type Version = {
   promo_types: string[]
   border: string
   lang: string
+  /** The Scryfall card itself, used when you put this printing into your cards. */
+  raw: Json
 }
 
 export async function versionsOf(oracleId: string): Promise<Version[]> {
@@ -49,6 +53,7 @@ export async function versionsOf(oracleId: string): Promise<Version[]> {
     promo_types: (card.promo_types as unknown as string[]) ?? [],
     border: (card.border_color as unknown as string) ?? 'black',
     lang: (card.lang as unknown as string) ?? 'en',
+    raw: card as unknown as Json,
   }))
 }
 
@@ -105,4 +110,40 @@ export function versionPrice(version: Version) {
   if (version.price_eur != null) parts.push(euro(version.price_eur))
   if (version.price_eur_foil != null) parts.push(`Foil ${euro(version.price_eur_foil)}`)
   return parts.join(' · ')
+}
+
+/* One printing as a row for `private_cards`: German data when Scryfall has a
+   German print of it, so it reads like a scanned card. */
+export async function privateCardFrom(version: Version, finish: string) {
+  const german = await fetch(
+    `https://api.scryfall.com/cards/${version.set}/${version.number}/de`,
+    { headers: { Accept: 'application/json' } },
+  )
+  const card: Json = german.ok ? await german.json() : version.raw
+
+  const face = (card.card_faces as Json[] | undefined)?.[0]
+  const text = (key: string) =>
+    (card[key] as string | undefined) ??
+    ((face?.[key] as string | undefined) ? `${face?.[key]}` : undefined)
+  const images = (card.image_uris ?? face?.image_uris) as Record<string, string> | undefined
+
+  return {
+    print_id: card.id as string,
+    oracle_id: (card.oracle_id ?? version.raw.oracle_id) as string,
+    set_code: card.set as string,
+    set_name: card.set_name as string,
+    number: card.collector_number as string,
+    name: card.name as string,
+    name_de: text('printed_name') ?? null,
+    type_line: text('type_line') ?? '',
+    type_de: text('printed_type_line') ?? null,
+    mana_cost: text('mana_cost') ?? '',
+    cmc: (card.cmc as number) ?? 0,
+    colors: ((card.colors ?? face?.colors ?? []) as string[]).join(''),
+    rarity: (card.rarity as string) ?? 'common',
+    image: images?.normal ?? null,
+    price_eur: Number((card.prices as Record<string, string> | undefined)?.eur) || null,
+    lang: (card.lang as string) ?? 'en',
+    finish,
+  }
 }

@@ -97,6 +97,9 @@ function Versions(props: {
   onAdd?: (version: Version, finish: string) => Promise<void>
 }) {
   const { card, owned, ownedLabel, onAdd } = props
+  /* A German print has its own Scryfall id, so set and number count too. */
+  const have = (version: Version) =>
+    owned.includes(version.id) || owned.includes(`${version.set}/${version.number}`)
   const [open, setOpen] = useState(false)
   const [list, setList] = useState<Version[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -120,7 +123,7 @@ function Versions(props: {
       {open && list && (
         <ul className="version-list">
           {list.map((version) => (
-            <li key={version.id} className={owned.includes(version.id) ? 'have' : ''}>
+            <li key={version.id} className={have(version) ? 'have' : ''}>
               {version.image && <img src={version.image} alt="" loading="lazy" />}
               <span className="version-text">
                 <strong>
@@ -130,7 +133,7 @@ function Versions(props: {
                   {[version.set_name, versionLabel(version), versionPrice(version)]
                     .filter(Boolean)
                     .join(' · ')}
-                  {owned.includes(version.id) && ` · ${ownedLabel}`}
+                  {have(version) && ` · ${ownedLabel}`}
                 </span>
               </span>
               {onAdd && (

@@ -810,7 +810,10 @@ function CardDialog(props: {
       card={card}
       note={`${copies}× gescannt`}
       onClose={onClose}
-      ownedPrints={prints.map((row) => row.print_id)}
+      ownedPrints={[
+        ...prints.map((row) => row.print_id),
+        ...(copies ? [`${card.set_code}/${card.number}`] : []),
+      ]}
       onAddVersion={
         editable ? (version, finish) => onChangeCopies(1, version.id, finish) : undefined
       }
