@@ -126,7 +126,7 @@ export default function StatsPage() {
         .map((c) => cubeRow(c, cube.copies.get(c.id) ?? 0, cube.prints.get(c.id) ?? [])),
       missing: { cards: gap.length, value: gap.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
     }
-  }, [source, mine, cube.cards, cube.sets, cube.copies, cube.loading])
+  }, [source, mine, cube.cards, cube.sets, cube.copies, cube.prints, cube.loading])
 
   const stats = useMemo(() => {
     if (!rows) return null
