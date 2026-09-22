@@ -58,7 +58,15 @@ export type Card = {
 }
 
 /** One stack of the same print in the same finish: 'nonfoil', 'foil' or 'etched'. */
-export type Copy = { print_id: string; card_id: string; lang: string; qty: number; finish: string }
+export type Copy = {
+  print_id: string
+  card_id: string
+  lang: string
+  qty: number
+  finish: string
+  /** What this printing in this finish costs; null falls back to the card. */
+  price_eur: number | null
+}
 
 export type CardEvent = {
   id: number

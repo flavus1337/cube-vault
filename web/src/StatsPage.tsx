@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
 import { useCube } from './cube'
 import { summary } from './format'
-import { fetchAll, type Card, type PrivateCard } from './supabase'
+import { fetchAll, type Card, type Copy, type PrivateCard } from './supabase'
 
 // One row per card, no matter which list it came from.
 type Row = {
@@ -12,6 +12,8 @@ type Row = {
   rarity: string | null
   price: number | null
   qty: number
+  /** What the copies are worth together; foils cost more than the card. */
+  value: number
 }
 
 const COLOR_GROUPS: [string, string][] = [
@@ -106,7 +108,10 @@ export default function StatsPage() {
       const piles = new Map<string, Row>()
       for (const card of mine ?? []) {
         const seen = piles.get(card.print_id)
-        if (seen) seen.qty += card.qty
+        if (seen) {
+          seen.qty += card.qty
+          seen.value += (card.price_eur ?? 0) * card.qty
+        }
         else piles.set(card.print_id, privateRow(card))
       }
       return { rows: mine ? [...piles.values()] : null, missing: null }
@@ -116,7 +121,9 @@ export default function StatsPage() {
     const cards = cube.cards.filter((c) => inCube.has(c.set_code) && !c.excluded)
     const gap = cards.filter((c) => !cube.copies.get(c.id))
     return {
-      rows: cards.filter((c) => cube.copies.get(c.id)).map((c) => cubeRow(c, cube.copies.get(c.id) ?? 0)),
+      rows: cards
+        .filter((c) => cube.copies.get(c.id))
+        .map((c) => cubeRow(c, cube.copies.get(c.id) ?? 0, cube.prints.get(c.id) ?? [])),
       missing: { cards: gap.length, value: gap.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
     }
   }, [source, mine, cube.cards, cube.sets, cube.copies, cube.loading])
@@ -136,7 +143,7 @@ export default function StatsPage() {
     return {
       cards: rows.length,
       copies: rows.reduce((sum, row) => sum + row.qty, 0),
-      value: rows.reduce((sum, row) => sum + (row.price ?? 0) * row.qty, 0),
+      value: rows.reduce((sum, row) => sum + row.value, 0),
       colors: COLOR_GROUPS.map(
         ([key, label]) => [label, weigh(rows.filter((row) => colorGroup(row) === key))] as [string, number],
       ),
@@ -208,13 +215,14 @@ export default function StatsPage() {
   )
 }
 
-const cubeRow = (c: Card, qty: number): Row => ({
+const cubeRow = (c: Card, qty: number, copies: Copy[]): Row => ({
   colors: c.colors,
   cmc: c.cmc,
   type: c.type_de || c.type_line,
   rarity: c.rarity,
   price: c.price_eur,
   qty,
+  value: copies.reduce((sum, row) => sum + row.qty * (row.price_eur ?? c.price_eur ?? 0), 0),
 })
 
 const privateRow = (c: PrivateCard): Row => ({
@@ -224,4 +232,5 @@ const privateRow = (c: PrivateCard): Row => ({
   rarity: c.rarity,
   price: c.price_eur,
   qty: c.qty,
+  value: (c.price_eur ?? 0) * c.qty,
 })

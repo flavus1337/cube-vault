@@ -142,7 +142,13 @@ export async function privateCardFrom(version: Version, finish: string) {
     colors: ((card.colors ?? face?.colors ?? []) as string[]).join(''),
     rarity: (card.rarity as string) ?? 'common',
     image: images?.normal ?? null,
-    price_eur: Number((card.prices as Record<string, string> | undefined)?.eur) || null,
+    // The price of the finish you are adding, not of the plain printing.
+    price_eur:
+      Number(
+        (card.prices as Record<string, string> | undefined)?.[
+          finish === 'nonfoil' ? 'eur' : 'eur_foil'
+        ],
+      ) || null,
     lang: (card.lang as string) ?? 'en',
     finish,
   }

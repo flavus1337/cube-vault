@@ -1,4 +1,4 @@
-import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
+import { fetchAll, supabase, type Card, type Copy, type PrivateCard } from './supabase'
 
 /* Prices come from Scryfall when a set is loaded and then stay put. These
    functions fetch them again, one search per set instead of one request per
@@ -6,9 +6,11 @@ import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-async function scryfall(url: string) {
+/* [pause] is the wait before the call: searches are limited to about two per
+   second, single cards take ten. */
+async function scryfall(url: string, pause = 500) {
   for (let attempt = 0; ; attempt++) {
-    await sleep(500)
+    await sleep(pause)
     const res = await fetch(url, { headers: { Accept: 'application/json' } })
     if (res.status === 404) return null
     // 429 = too many requests. The wait header is not readable from a browser.
@@ -56,6 +58,34 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
   return prices
 }
 
+/* Copies point at a printing that may sit in another set than the card, e.g.
+   a Comic-Con foil. Those are asked for one by one; there are only a few. */
+async function refreshCopyPrices(progress: (text: string) => void) {
+  const all = await fetchAll<Copy>('copies', 'print_id')
+  /* A normal copy of the card's own printing is already covered by the card
+     price, so only foils and other printings are asked for. */
+  const copies = all.filter((copy) => copy.finish !== 'nonfoil' || copy.print_id !== copy.card_id)
+  const rows: { print_id: string; finish: string; price_eur: number | null }[] = []
+  for (const [i, copy] of copies.entries()) {
+    progress(`Preise der Exemplare … ${i + 1} von ${copies.length}`)
+    const card: { prices?: { eur?: string | null; eur_foil?: string | null } } | null =
+      await scryfall(`https://api.scryfall.com/cards/${copy.print_id}`, 120)
+    if (!card) continue
+    const raw = copy.finish === 'nonfoil' ? card.prices?.eur : card.prices?.eur_foil
+    const price = parseFloat(raw ?? '')
+    rows.push({
+      print_id: copy.print_id,
+      finish: copy.finish,
+      price_eur: Number.isNaN(price) ? null : price,
+    })
+  }
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.rpc('set_copy_prices', { rows: rows.slice(i, i + 500) })
+    if (error) throw error
+  }
+  return rows.filter((row) => row.price_eur != null).length
+}
+
 export async function refreshCubePrices(progress: (text: string) => void) {
   const cards = await fetchAll<Pick<Card, 'id' | 'set_code' | 'number' | 'price_eur'>>(
     'cards',
@@ -74,7 +104,8 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     const { error } = await supabase.rpc('set_card_data', { rows: rows.slice(i, i + 500) })
     if (error) throw error
   }
-  progress(`Fertig: ${rows.length} von ${cards.length} Karten aktualisiert.`)
+  const priced = await refreshCopyPrices(progress)
+  progress(`Fertig: ${rows.length} von ${cards.length} Karten, ${priced} Exemplare aktualisiert.`)
 }
 
 export async function refreshPrivatePrices(progress: (text: string) => void) {

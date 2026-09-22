@@ -174,7 +174,14 @@ function Versions(props: {
 /* The copies of one card, one row per printing and finish, so a foil can be
    counted next to the normal cards instead of turning the whole stack foil. */
 export function CopyRows(props: {
-  rows: { print_id: string; finish: string; lang?: string; qty: number; label?: string }[]
+  rows: {
+    print_id: string
+    finish: string
+    qty: number
+    label?: string
+    /** Price of one copy in this finish, shown next to the label. */
+    price?: number | null
+  }[]
   onChange: (print_id: string, finish: string, delta: number) => Promise<void>
   /** Adds a finish that is not in the list yet, on the card's main printing. */
   onAdd?: (finish: string) => Promise<void>
@@ -199,6 +206,7 @@ export function CopyRows(props: {
           <span>
             {finishLabel(row.finish)}
             {row.label && <span className="muted"> · {row.label}</span>}
+            {row.price != null && <span className="muted"> · {euro(row.price)}</span>}
           </span>
           <span className="copies">
             <button

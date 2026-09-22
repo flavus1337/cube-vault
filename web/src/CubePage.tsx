@@ -341,12 +341,18 @@ export default function CubePage({ role }: { role: Role }) {
   )
   const owned = matched.filter((c) => copies.get(c.id))
   const missing = matched.filter((c) => !copies.get(c.id))
+  /* Each stack is worth what its own printing and finish cost; only a stack
+     without a price of its own falls back to the card's price. */
+  const valueOf = (card: Card) =>
+    (prints.get(card.id) ?? []).reduce(
+      (sum, row) => sum + row.qty * (row.price_eur ?? card.price_eur ?? 0),
+      0,
+    )
   const line = summary(
     {
       cards: owned.length,
       copies: matched.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0),
-      // Cardmarket price of the English print, times the copies you own.
-      value: matched.reduce((sum, c) => sum + (c.price_eur ?? 0) * (copies.get(c.id) ?? 0), 0),
+      value: matched.reduce((sum, c) => sum + valueOf(c), 0),
     },
     // Every missing card counts once: what one copy each would cost.
     { cards: missing.length, value: missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
@@ -355,7 +361,13 @@ export default function CubePage({ role }: { role: Role }) {
   // Editors change the number of scanned copies right here.
   /* [printId] and [finish] say which stack changes: the foil of a printing is
      counted on its own, next to the normal copies. */
-  async function changeCopies(card: Card, delta: number, printId?: string, finish = 'nonfoil') {
+  async function changeCopies(
+    card: Card,
+    delta: number,
+    printId?: string,
+    finish = 'nonfoil',
+    price?: number | null,
+  ) {
     const known = prints.get(card.id) ?? []
     const id = printId ?? known[0]?.print_id ?? card.id
     const { error } = await supabase.rpc(delta > 0 ? 'add_copy' : 'remove_copy', {
@@ -363,7 +375,9 @@ export default function CubePage({ role }: { role: Role }) {
       p_card_id: card.id,
       p_source: 'web', // the history says where a change came from
       p_finish: finish,
-      ...(delta > 0 ? { p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en' } : {}),
+      ...(delta > 0
+        ? { p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en', p_price: price ?? null }
+        : {}),
     })
     if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
     await reloadCopies()
@@ -553,7 +567,9 @@ export default function CubePage({ role }: { role: Role }) {
           copies={copies.get(selected.id) ?? 0}
           prints={prints.get(selected.id) ?? []}
           editable={canEdit(role)}
-          onChangeCopies={(delta, printId, finish) => changeCopies(selected, delta, printId, finish)}
+          onChangeCopies={(delta, printId, finish, price) =>
+            changeCopies(selected, delta, printId, finish, price)
+          }
           onToggleExcluded={() => toggleExcluded(selected)}
           onClose={() => setSelected(null)}
         />
@@ -790,7 +806,12 @@ function CardDialog(props: {
   copies: number
   prints: Copy[]
   editable: boolean
-  onChangeCopies: (delta: number, printId?: string, finish?: string) => Promise<void>
+  onChangeCopies: (
+    delta: number,
+    printId?: string,
+    finish?: string,
+    price?: number | null,
+  ) => Promise<void>
   onToggleExcluded: () => void
   onClose: () => void
 }) {
@@ -803,6 +824,7 @@ function CardDialog(props: {
       finish: row.finish ?? 'nonfoil',
       qty: row.qty,
       label: row.lang.toUpperCase(),
+      price: row.price_eur ?? card.price_eur,
     }))
 
   return (
@@ -815,7 +837,15 @@ function CardDialog(props: {
         ...(copies ? [`${card.set_code}/${card.number}`] : []),
       ]}
       onAddVersion={
-        editable ? (version, finish) => onChangeCopies(1, version.id, finish) : undefined
+        editable
+          ? (version, finish) =>
+              onChangeCopies(
+                1,
+                version.id,
+                finish,
+                finish === 'nonfoil' ? version.price_eur : version.price_eur_foil,
+              )
+          : undefined
       }
       actions={
         editable ? (
