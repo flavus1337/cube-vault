@@ -177,7 +177,13 @@ function CardDialog(props: {
   const copies = rows.reduce((sum, row) => sum + row.qty, 0)
 
   return (
-    <CardDetail card={card} note={`${copies}× vorhanden`} onClose={onClose}>
+    <CardDetail
+      card={card}
+      note={`${copies}× vorhanden`}
+      ownedPrints={[card.print_id]}
+      ownedLabel="bei dir"
+      onClose={onClose}
+    >
       <CopyRows
         rows={rows.map((row) => ({ print_id: row.print_id, finish: row.finish, qty: row.qty }))}
         onChange={(_print, finish, delta) => onChange(delta, finish)}

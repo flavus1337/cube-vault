@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cardmarket, euro, FINISHES, finishLabel, png, RARITY } from './format'
-import { versionLabel, versionsOf, type Version } from './versions'
+import { versionLabel, versionPrice, versionsOf, type Version } from './versions'
 
 /* What the detail view needs. Own cards keep fewer fields than cube cards,
    so everything but the printing is optional. */
@@ -28,11 +28,13 @@ export default function CardDetail(props: {
   actions?: ReactNode
   /** Scryfall ids of the printings you own, marked in the version list. */
   ownedPrints?: string[]
+  /** What the mark says, e.g. "im Cube" or "bei dir". */
+  ownedLabel?: string
   /** Lets an editor put a printing from the list into the cube. */
   onAddVersion?: (version: Version, finish: string) => Promise<void>
   onClose: () => void
 }) {
-  const { card, note, children, actions, ownedPrints, onAddVersion, onClose } = props
+  const { card, note, children, actions, ownedPrints, ownedLabel, onAddVersion, onClose } = props
   const ref = useRef<HTMLDialogElement>(null)
   const [hiRes, setHiRes] = useState<string | null>(null)
   const title = card.name_de || card.name
@@ -66,7 +68,12 @@ export default function CardDetail(props: {
         {note && <> · {note}</>}
       </p>
       {children}
-      <Versions card={card} owned={ownedPrints ?? []} onAdd={onAddVersion} />
+      <Versions
+        card={card}
+        owned={ownedPrints ?? []}
+        ownedLabel={ownedLabel ?? 'im Cube'}
+        onAdd={onAddVersion}
+      />
       <p>
         <a href={cardmarket(card.name)} target="_blank" rel="noopener">
           Bei Cardmarket suchen
@@ -86,9 +93,10 @@ export default function CardDetail(props: {
 function Versions(props: {
   card: DetailCard
   owned: string[]
+  ownedLabel: string
   onAdd?: (version: Version, finish: string) => Promise<void>
 }) {
-  const { card, owned, onAdd } = props
+  const { card, owned, ownedLabel, onAdd } = props
   const [open, setOpen] = useState(false)
   const [list, setList] = useState<Version[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -119,10 +127,10 @@ function Versions(props: {
                   {version.set.toUpperCase()} #{version.number}
                 </strong>
                 <span className="muted">
-                  {version.set_name}
-                  {versionLabel(version) && ` · ${versionLabel(version)}`}
-                  {version.price_eur != null && ` · ${euro(version.price_eur)}`}
-                  {owned.includes(version.id) && ' · im Cube'}
+                  {[version.set_name, versionLabel(version), versionPrice(version)]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  {owned.includes(version.id) && ` · ${ownedLabel}`}
                 </span>
               </span>
               {onAdd && (
