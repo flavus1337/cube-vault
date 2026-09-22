@@ -61,9 +61,14 @@ Release builds are signed with the keystore named in `android/key.properties`
 (see `key.properties.example`). Without that file the debug key is used, and the
 app can't be installed over a release build.
 
-`tools/release.sh "Was ist neu"` builds, tags and publishes. The file in the
-release has to be named `cube-vault.apk`: the website and the update check in
-the app both load `releases/latest/download/cube-vault.apk`.
+`tools/release.sh "Was ist neu"` builds, tags and publishes. Two things the
+release depends on:
+
+- The file has to be named `cube-vault.apk`. The website and the update check
+  in the app both load `releases/latest/download/cube-vault.apk`.
+- The build number in `pubspec.yaml` (`0.6.0+2018`) counts in the 2000s and has
+  to grow. Android installs no build number below the one on the phone; v0.4.2
+  went out as 2016, so a smaller number gives "App nicht installiert".
 
 ## Supabase
 
