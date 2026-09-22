@@ -64,16 +64,29 @@ const _langs = {
 
 /// Fetches the print in its printed language. Scryfall does not have every
 /// language for every set, so this falls back to the English print.
+/// [variant] picks the printing: 'normal', or 'prerelease' and 'promo' for the
+/// stamped cards. Those carry the same set code and number on the card itself;
+/// Scryfall keeps them in the promo set, e.g. FDN 134 becomes PFDN 134s.
 Future<Map<String, dynamic>?> fetchBySetNumber(
   String set,
   String number,
-  String? lang,
-) async {
-  final path = '/cards/${set.toLowerCase()}/$number';
+  String? lang, {
+  String variant = 'normal',
+}) async {
   // Unknown language: German first, the cube is played in German.
   final code = _langs[lang ?? 'DE'] ?? 'en';
-  final card = code == 'en' ? null : await _get('$path/$code');
-  return card ?? _get(path);
+
+  Future<Map<String, dynamic>?> print(String path) async {
+    final card = code == 'en' ? null : await _get('$path/$code');
+    return card ?? _get(path);
+  }
+
+  if (variant != 'normal') {
+    final suffix = variant == 'prerelease' ? 's' : 'p';
+    final promo = await print('/cards/p${set.toLowerCase()}/$number$suffix');
+    if (promo != null) return promo;
+  }
+  return print('/cards/${set.toLowerCase()}/$number');
 }
 
 /// Double-faced and reversible cards can keep the oracle id on their faces.

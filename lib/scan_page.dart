@@ -31,6 +31,14 @@ const _finishes = <(String, String, IconData)>[
   ('etched', 'Etched', Icons.brush),
 ];
 
+/// Printing of a scanned card. Scryfall keeps the stamped ones in the promo
+/// set of the same block, e.g. FDN 134 next to PFDN 134s.
+const _variants = <(String, String)>[
+  ('normal', 'Standard'),
+  ('prerelease', 'Prerelease'),
+  ('promo', 'Promo'),
+];
+
 class ScanPage extends StatefulWidget {
   /// Only editors and admins may scan into the cube. Everyone else collects
   /// into their own cards.
@@ -64,6 +72,10 @@ class _ScanPageState extends State<ScanPage> {
   /* Foil, etched foil or plain. Stays set until you change it, so a pile of
      foils goes in one after the other. Each finish is counted on its own. */
   String _finish = 'nonfoil';
+  /* Prerelease and promo pack cards print the same set code and number as the
+     normal card; only the stamp on the picture differs, which the camera
+     cannot tell apart. You pick the printing here. */
+  String _variant = 'normal';
 
   _Found? _last;
   // The card just counted. It counts again only after the camera saw nothing
@@ -337,19 +349,31 @@ class _ScanPageState extends State<ScanPage> {
   Future<_Found?> _lookup(CardHit hit) async {
     if (_privateMode) return _lookupPrivate(hit);
     var confirmed = false;
+    // The print that is counted, and the print the cube card is built from.
+    // For a prerelease card those differ: PFDN 134s belongs to FDN 134.
     Map<String, dynamic>? json;
+    Map<String, dynamic>? base;
     if (hit.set != null) {
-      json = await fetchBySetNumber(hit.set!, hit.number, hit.lang);
+      json = await fetchBySetNumber(
+        hit.set!,
+        hit.number,
+        hit.lang,
+        variant: _variant,
+      );
+      base = json == null || json['set'] == hit.set!.toLowerCase()
+          ? json
+          : await fetchBySetNumber(hit.set!, hit.number, hit.lang) ?? json;
     } else {
       final found = await _findInCubeSets(hit);
       json = found?.json;
+      base = json;
       confirmed = found?.confirmed ?? false;
     }
-    if (json == null) return null;
+    if (json == null || base == null) return null;
     final printId = json['id'] as String;
     final lang = json['lang'] as String;
-    final setCode = json['set'] as String;
-    final oracleId = oracleIdOf(json);
+    final setCode = base['set'] as String;
+    final oracleId = oracleIdOf(base);
     if (oracleId == null) {
       return (
         printId: printId,
@@ -368,7 +392,7 @@ class _ScanPageState extends State<ScanPage> {
             printId: printId,
             lang: lang,
             card: null,
-            problem: '${json['set_name']} ist nicht im Cube',
+            problem: '${base['set_name']} ist nicht im Cube',
             confirmed: confirmed,
           );
         }
@@ -380,14 +404,14 @@ class _ScanPageState extends State<ScanPage> {
             ? parent
             : null;
         if (parentCode == null) {
-          final answer = await _askNewSet('${json['set_name']}');
+          final answer = await _askNewSet('${base['set_name']}');
           if (answer == null) {
             _declinedSets.add(setCode);
             return (
               printId: printId,
               lang: lang,
               card: null,
-              problem: '${json['set_name']} ist nicht im Cube',
+              problem: '${base['set_name']} ist nicht im Cube',
               confirmed: confirmed,
             );
           }
@@ -408,7 +432,7 @@ class _ScanPageState extends State<ScanPage> {
         card = await Db.findCard(setCode, oracleId);
       }
       // A set added before whole-set loading can still miss this card.
-      card ??= await Db.addCard(await fetchCardRow(json));
+      card ??= await Db.addCard(await fetchCardRow(base));
     }
 
     final set = card?['sets'] as Map?;
@@ -432,7 +456,7 @@ class _ScanPageState extends State<ScanPage> {
   /// code on the card the name decides, across all sets.
   Future<_Found?> _lookupPrivate(CardHit hit) async {
     final json = hit.set != null
-        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang)
+        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang, variant: _variant)
         : hit.name == null
         ? null
         : await fetchByPrintedName(hit.name!);
@@ -586,7 +610,7 @@ class _ScanPageState extends State<ScanPage> {
           ],
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(104),
+          preferredSize: const Size.fromHeight(152),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -594,6 +618,8 @@ class _ScanPageState extends State<ScanPage> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Wrap(
                   spacing: 8,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.center,
                   children: [
                     for (final option in _finishes)
                       ChoiceChip(
@@ -601,6 +627,30 @@ class _ScanPageState extends State<ScanPage> {
                         avatar: Icon(option.$3, size: 18),
                         selected: _finish == option.$1,
                         onSelected: (_) => setState(() => _finish = option.$1),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    for (final option in _variants)
+                      ChoiceChip(
+                        label: Text(option.$2),
+                        selected: _variant == option.$1,
+                        onSelected: (_) => setState(() {
+                          _variant = option.$1;
+                          // Prerelease cards are always foil.
+                          if (_variant == 'prerelease') _finish = 'foil';
+                          // The same card is a different print now.
+                          _cache.clear();
+                          _countedCardId = null;
+                          _last = null;
+                        }),
                       ),
                   ],
                 ),
