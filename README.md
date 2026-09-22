@@ -61,6 +61,10 @@ Release builds are signed with the keystore named in `android/key.properties`
 (see `key.properties.example`). Without that file the debug key is used, and the
 app can't be installed over a release build.
 
+`tools/release.sh "Was ist neu"` builds, tags and publishes. The file in the
+release has to be named `cube-vault.apk`: the website and the update check in
+the app both load `releases/latest/download/cube-vault.apk`.
+
 ## Supabase
 
 `lib/config.dart` and `web/src/supabase.ts` hold the project URL and the
