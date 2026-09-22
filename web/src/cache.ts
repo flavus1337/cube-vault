@@ -4,7 +4,8 @@ import type { Card, Copy, CubeSet, PrivateCard } from './supabase'
 /* The cube is about 2 MB of cards that hardly ever change. Keeping them in
    localStorage means a visit only asks for the events since the last one.
    Card rows and prices are written without an event, so the copy expires. */
-const KEY = 'cube-cards-v1'
+// v2: copies carry a finish since migration 0010, older copies are dropped.
+const KEY = 'cube-cards-v2'
 const MAX_AGE = 6 * 60 * 60 * 1000
 
 export type CubeCache = {
@@ -46,7 +47,7 @@ export function clearCache() {
 
 /* Own cards are few and only you change them, so the page shows the stored
    ones at once and replaces them with whatever the database answers. */
-const MINE = 'my-cards-v1'
+const MINE = 'my-cards-v2'
 
 export function readMine(): PrivateCard[] | null {
   try {

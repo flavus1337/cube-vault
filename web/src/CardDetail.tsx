@@ -57,28 +57,34 @@ export default function CardDetail(props: {
   const rules = card.text_de || card.oracle_text
   return (
     <dialog ref={ref} className="detail" aria-labelledby="card-detail-title" onClose={onClose}>
-      {card.image && <img src={hiRes ?? card.image} alt={title} />}
-      <h2 id="card-detail-title">{title}</h2>
-      {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
-      <p>{card.type_de || card.type_line}</p>
-      {rules && <p className="rules">{rules}</p>}
-      <p className="muted">
-        {card.set_code.toUpperCase()} #{card.number}
-        {card.rarity && ` · ${RARITY[card.rarity] ?? card.rarity}`} · {euro(card.price_eur)}
-        {note && <> · {note}</>}
-      </p>
-      {children}
-      <Versions
-        card={card}
-        owned={ownedPrints ?? []}
-        ownedLabel={ownedLabel ?? 'im Cube'}
-        onAdd={onAddVersion}
-      />
-      <p>
-        <a href={cardmarket(card.name)} target="_blank" rel="noopener">
-          Bei Cardmarket suchen
-        </a>
-      </p>
+      <div className="detail-grid">
+        <div className="detail-art">
+          {card.image && <img src={hiRes ?? card.image} alt={title} />}
+        </div>
+        <div className="detail-body">
+          <h2 id="card-detail-title">{title}</h2>
+          {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
+          <p className="detail-type">{card.type_de || card.type_line}</p>
+          <p className="muted detail-print">
+            {card.set_code.toUpperCase()} #{card.number}
+            {card.rarity && ` · ${RARITY[card.rarity] ?? card.rarity}`} · {euro(card.price_eur)}
+            {note && <> · {note}</>}
+          </p>
+          {rules && <p className="rules">{rules}</p>}
+          {children}
+          <Versions
+            card={card}
+            owned={ownedPrints ?? []}
+            ownedLabel={ownedLabel ?? 'im Cube'}
+            onAdd={onAddVersion}
+          />
+          <p>
+            <a href={cardmarket(card.name)} target="_blank" rel="noopener">
+              Bei Cardmarket suchen
+            </a>
+          </p>
+        </div>
+      </div>
       <div className="actions">
         {actions}
         <button className="primary" onClick={() => ref.current?.close()}>

@@ -30,5 +30,5 @@ export const FINISHES: [string, string][] = [
   ['etched', 'Etched Foil'],
 ]
 
-export const finishLabel = (finish: string) =>
-  FINISHES.find(([key]) => key === finish)?.[1] ?? finish
+export const finishLabel = (finish: string | null | undefined) =>
+  FINISHES.find(([key]) => key === finish)?.[1] ?? finish ?? 'Normal'

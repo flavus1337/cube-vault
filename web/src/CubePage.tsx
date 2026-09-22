@@ -800,7 +800,7 @@ function CardDialog(props: {
     .sort((a, b) => a.finish.localeCompare(b.finish) || a.lang.localeCompare(b.lang))
     .map((row) => ({
       print_id: row.print_id,
-      finish: row.finish,
+      finish: row.finish ?? 'nonfoil',
       qty: row.qty,
       label: row.lang.toUpperCase(),
     }))

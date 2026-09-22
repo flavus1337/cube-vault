@@ -212,14 +212,26 @@ dialog.filter-dialog::backdrop { background: rgb(9 7 6 / .72); backdrop-filter: 
 .badge.out { top: auto; bottom: 10px; left: 10px; right: auto; background: rgb(21 18 15 / .92); color: var(--warn); border-color: var(--brass); font-weight: 700; }
 
 dialog.detail {
-  max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  width: min(960px, 100vw - 24px); max-height: calc(100dvh - 32px); padding: 0;
+  overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel); color: var(--text); border: 1px solid var(--line-strong); border-radius: 14px;
-  padding: 18px; width: min(480px, calc(100vw - 24px)); box-shadow: 0 28px 70px rgb(0 0 0 / .56);
+  box-shadow: 0 28px 70px rgb(0 0 0 / .56);
 }
 dialog.detail::backdrop { background: rgb(9 7 6 / .82); backdrop-filter: blur(3px); }
-dialog.detail img { width: 100%; max-height: min(54vh, 620px); object-fit: contain; border-radius: 4.5% / 3.2%; display: block; background: var(--panel-soft); }
-dialog.detail h2 { margin: 16px 0 2px; font-size: 24px; line-height: 1.15; }
-dialog.detail p { margin: 4px 0; }
+/* Card on the left, everything you can read or press on the right. */
+.detail-grid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 22px; padding: 20px; }
+.detail-art img { width: 100%; border-radius: 4.5% / 3.2%; display: block; background: var(--panel-soft); }
+.detail-body { min-width: 0; }
+.detail-body > p { margin: 4px 0; }
+dialog.detail h2 { margin: 0 0 2px; font-size: 24px; line-height: 1.15; }
+.detail-type { margin-top: 6px !important; }
+.detail-print { font-variant-numeric: tabular-nums; }
+dialog.detail .actions { margin: 0; padding: 14px 20px; position: sticky; bottom: 0;
+  background: var(--panel-raised); border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .detail-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
+  .detail-art img { max-height: 34dvh; object-fit: contain; }
+}
 .rules { margin-block: 12px !important; padding-block: 10px; border-block: 1px solid var(--line); white-space: pre-line; }
 .warn { color: var(--warn); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
@@ -240,7 +252,7 @@ dialog.detail p { margin: 4px 0; }
 .version-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); }
 .version-list li.have { border-color: var(--brass); }
-.version-list img { width: 42px; border-radius: 4px; flex: none; }
+dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 4px; flex: none; }
 .version-text { display: grid; gap: 1px; min-width: 0; flex: 1; font-size: 13px; }
 .version-text .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
