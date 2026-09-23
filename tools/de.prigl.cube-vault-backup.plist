@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Daily backup at 01:00. launchd runs it as soon as the Mac is awake again
+     when it slept through the hour. Install with:
+       cp tools/de.prigl.cube-vault-backup.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/de.prigl.cube-vault-backup.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>de.prigl.cube-vault-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>$HOME/Documents/projects/mtg_scanner/tools/backup.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>1</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/cube-vault-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/cube-vault-backup.log</string>
+</dict>
+</plist>
