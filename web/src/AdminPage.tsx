@@ -3,7 +3,17 @@ import { useCube } from './cube'
 import { euro } from './format'
 import { RowSkeleton } from './Skeleton'
 import Summary from './Summary'
-import { fetchAll, type CardEvent, type Profile, type Role } from './supabase'
+import { fetchAll, supabase, type CardEvent, type Profile, type Role } from './supabase'
+
+/* Counts only: how much a player keeps outside the cube. The database hands
+   out no names, no cards and no deck lists, and answers only an admin. */
+type Totals = {
+  owner: string
+  private_cards: number
+  private_copies: number
+  decks: number
+  deck_cards: number
+}
 
 const ROLES: Record<Role, string> = {
   waiting: 'Wartet',
@@ -37,15 +47,21 @@ export default function AdminPage() {
   const cube = useCube()
   const [events, setEvents] = useState<CardEvent[] | null>(null)
   const [players, setPlayers] = useState<Profile[]>([])
+  const [totals, setTotals] = useState<Map<string, Totals>>(new Map())
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let stop = false
-    Promise.all([fetchAll<CardEvent>('card_events', 'id'), fetchAll<Profile>('profiles', 'id')])
-      .then(([events, profiles]) => {
+    Promise.all([
+      fetchAll<CardEvent>('card_events', 'id'),
+      fetchAll<Profile>('profiles', 'id'),
+      supabase.rpc('player_totals'),
+    ])
+      .then(([events, profiles, counts]) => {
         if (stop) return
         setEvents(events)
         setPlayers(profiles)
+        setTotals(new Map(((counts.data ?? []) as Totals[]).map((row) => [row.owner, row])))
       })
       .catch((e) => !stop && setError((e as Error).message))
     return () => {
@@ -145,8 +161,9 @@ export default function AdminPage() {
     <main className="page narrow">
       <h1>Übersicht</h1>
       <p className="muted">
-        Was im Cube steckt und wer ihn gefüllt hat. Eigene Karten und Decks der Spieler stehen hier
-        nicht: die gibt die Datenbank niemandem heraus, auch keinem Admin.
+        Was im Cube steckt und wer ihn gefüllt hat. Von den eigenen Karten und Decks stehen hier nur
+        die Anzahlen — welche Karten das sind und wie die Decks heißen, behält die Datenbank bei
+        ihrem Besitzer.
       </p>
 
       <Summary {...figures} />
@@ -180,6 +197,8 @@ export default function AdminPage() {
               <th className="num">Sets</th>
               <th className="num">Foils</th>
               <th>App / Website</th>
+              <th className="num">Eigene Karten</th>
+              <th className="num">Decks</th>
               <th>Zuletzt</th>
             </tr>
           </thead>
@@ -195,6 +214,16 @@ export default function AdminPage() {
                 <td className="num">{row.foils || '—'}</td>
                 <td>
                   {row.added ? `${row.fromApp} / ${row.fromWeb}` : '—'}
+                </td>
+                <td className="num">
+                  {totals.get(row.id)?.private_cards
+                    ? `${totals.get(row.id)!.private_cards} · ${totals.get(row.id)!.private_copies} Kopien`
+                    : '—'}
+                </td>
+                <td className="num">
+                  {totals.get(row.id)?.decks
+                    ? `${totals.get(row.id)!.decks} · ${totals.get(row.id)!.deck_cards} Karten`
+                    : '—'}
                 </td>
                 <td>{row.last ? new Date(row.last).toLocaleDateString('de-DE') : '—'}</td>
               </tr>
