@@ -58,7 +58,16 @@ export default function CubePage({ role }: { role: Role }) {
   }, [])
 
   useEffect(() => {
-    loadWants().catch(() => setWants(new Map()))
+    const refresh = () => loadWants().catch(() => setWants(new Map()))
+    refresh()
+    /* A scan takes a card off the list in the database, whoever scanned it.
+       The open page hears about it on the same rhythm as the cube itself. */
+    const timer = setInterval(() => !document.hidden && refresh(), 60000)
+    addEventListener('focus', refresh)
+    return () => {
+      clearInterval(timer)
+      removeEventListener('focus', refresh)
+    }
   }, [loadWants])
 
   async function toggleWant(card: Card) {
@@ -302,7 +311,8 @@ export default function CubePage({ role }: { role: Role }) {
         : {}),
     })
     if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
-    await reloadCopies()
+    // A copy in the cube means the card is off the shopping list.
+    await Promise.all([reloadCopies(), loadWants()])
   }
 
   async function toggleExcluded(card: Card) {
