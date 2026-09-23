@@ -153,10 +153,12 @@ export default function AdminPage() {
 
       <h2>Scans je Tag</h2>
       <div className="curve" role="img" aria-label={`Scans der letzten vier Wochen: ${recent.map(([d, n]) => `${germanDay(d)}: ${n}`).join(', ')}`}>
-        {recent.map(([date, count]) => (
+        {recent.map(([date, count], i) => (
           <span key={date} className="curve-col" title={`${germanDay(date)}: ${count} Scans`}>
             <span className="curve-value">{count || ''}</span>
             <span className="curve-bar" style={{ height: `${(count / max) * 100}%` }} />
+            {/* Every seventh day carries its date; all of them would be a wall. */}
+            <span className="curve-label">{i % 7 === 0 || i === recent.length - 1 ? germanDay(date) : ''}</span>
           </span>
         ))}
       </div>
