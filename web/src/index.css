@@ -296,8 +296,17 @@ dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
 .version-add button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 
-/* The line that greets a first visit, with the search examples in it. */
-.intro { margin: 10px 2px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* What a first visit needs, until it is sent away. */
+.intro-card {
+  position: relative; margin: 14px 0 0; padding: 18px 20px;
+  border: 1px solid var(--brass); border-radius: 12px; background: var(--panel-soft);
+  box-shadow: var(--shadow);
+}
+.intro-card h2 { margin: 0 0 10px; font-size: 20px; }
+.intro-card ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 4px; }
+.intro-card p { margin: 0; }
+.intro-card .examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.intro-card .dialog-close { position: absolute; top: 10px; right: 10px; }
 .example { min-height: 34px; padding: 3px 10px; border-radius: 999px; font-size: 13px; color: var(--muted); }
 .example code { color: var(--text); }
 .summary .hint { color: var(--muted); }

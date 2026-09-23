@@ -4,8 +4,10 @@ import CardDialog from './CardDialog'
 import CardTile from './CardTile'
 import { useCube } from './cube'
 import FilterDialog from './FilterDialog'
+import FirstVisit from './FirstVisit'
 import { type AdvancedFilters, type AppliedFilterKey } from './filters'
 import { euro } from './format'
+import { APK_URL } from './links'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
@@ -16,15 +18,6 @@ import { canEdit, supabase, type Card, type Role } from './supabase'
 import { loadTags } from './tags'
 import { useGrowing } from './useGrowing'
 
-
-/** Shown under the search field until someone searches. */
-const EXAMPLES: [string, string][] = [
-  ['c:r', 'rot'],
-  ['t:kreatur mv<=2', 'kleine Kreaturen'],
-  ['is:missing', 'fehlt euch'],
-  ['eur>5', 'teuer'],
-  ['otag:removal', 'Entfernung'],
-]
 
 const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
@@ -362,18 +355,7 @@ export default function CubePage({ role }: { role: Role }) {
           )}
         </span>
       </div>
-      {/* First visit: what this page is and what the search can do. */}
-      {!text && !filtered && (
-        <p className="muted intro">
-          Der Cube sind die Karten, aus denen ihr draftet. Gescannt wird mit der App, hier siehst du
-          alles davon. Probier die Suche:{' '}
-          {EXAMPLES.map(([query, label]) => (
-            <button key={query} className="example" onClick={() => setText(query)}>
-              <code>{query}</code> {label}
-            </button>
-          ))}
-        </p>
-      )}
+      <FirstVisit apkUrl={APK_URL} onExample={setText} />
       {unknownFields.length > 0 && (
         <p className="warn notice">
           Die Suche kennt {unknownFields.map((field) => `${field}:`).join(', ')} nicht. Mögliche Felder
