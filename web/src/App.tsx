@@ -5,6 +5,7 @@ import MyCardsPage from './MyCardsPage'
 import DecksPage from './DecksPage'
 import StatsPage from './StatsPage'
 import { HistoryPage, PlayersPage, SetsPage } from './pages'
+import { APK_URL } from './links'
 import { supabase, type Profile } from './supabase'
 
 const logout = () => supabase.auth.signOut()
@@ -76,7 +77,7 @@ export default function App() {
         <p className="muted">
           Zum Scannen:{' '}
           <a
-            href="https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk"
+            href={APK_URL}
             target="_blank"
             rel="noopener"
           >
@@ -100,7 +101,6 @@ export default function App() {
     )
   }
 
-  const APK_URL = 'https://github.com/flavus1337/cube-vault/releases/latest/download/cube-vault.apk'
   const nav = [
     ['/cube', 'Cube'],
     ['/mine', 'Meine Karten'],
