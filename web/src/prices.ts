@@ -1,3 +1,4 @@
+import { money, priceFor, type PrintPrice } from './price'
 import { fetchAll, supabase, type Card, type Copy, type PrivateCard } from './supabase'
 
 /* Prices come from Scryfall when a set is loaded and then stay put. These
@@ -23,20 +24,16 @@ async function scryfall(url: string, pause = 500) {
   }
 }
 
-/** What one printing costs, plain and as a foil. */
-export type PrintPrice = { price_eur: number | null; price_eur_foil: number | null }
-
-const money = (raw: string | null | undefined) => {
-  const value = parseFloat(raw ?? '')
-  return Number.isNaN(value) ? null : value
-}
-
 /* One search per set brings every printing in it, in every language. The cards
    take the price of the English print, the scanned copies the price of their
    own print, found by its Scryfall id. */
 export async function pricesOfSets(sets: string[], progress: (text: string) => void) {
-  /** Keyed "set/collector number", English only: what a cube card is worth. */
-  const cards = new Map<string, { price_eur: number | null; legalities: Record<string, string> | null }>()
+  /* Keyed "set/collector number", English only. Scryfall prices only the
+     English printing of a set, so a German copy borrows its prices. */
+  const cards = new Map<
+    string,
+    PrintPrice & { legalities: Record<string, string> | null }
+  >()
   /** Keyed by Scryfall id: what a scanned printing is worth. */
   const prints = new Map<string, PrintPrice>()
 
@@ -69,6 +66,7 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
         if (card.lang === 'en') {
           cards.set(`${set}/${card.collector_number}`, {
             price_eur: money(card.prices?.eur),
+            price_eur_foil: money(card.prices?.eur_foil),
             legalities: card.legalities ?? null,
           })
         }
@@ -84,6 +82,8 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
    foil, is asked for on its own. */
 async function refreshCopyPrices(
   known: Map<string, PrintPrice>,
+  /** Per card the prices of its English printing, for prints without any. */
+  english: Map<string, PrintPrice>,
   progress: (text: string) => void,
 ) {
   const all = await fetchAll<Copy>('copies', 'print_id')
@@ -105,12 +105,13 @@ async function refreshCopyPrices(
   }
 
   for (const copy of copies) {
-    const price = known.get(copy.print_id)
-    if (!price) continue
+    const own = known.get(copy.print_id)
+    const fallback = english.get(copy.card_id)
+    if (!own && !fallback) continue
     rows.push({
       print_id: copy.print_id,
       finish: copy.finish,
-      price_eur: copy.finish === 'nonfoil' ? price.price_eur : price.price_eur_foil,
+      price_eur: priceFor(copy.finish, own, fallback),
     })
   }
 
@@ -139,7 +140,12 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     const { error } = await supabase.rpc('set_card_data', { rows: rows.slice(i, i + 500) })
     if (error) throw error
   }
-  const priced = await refreshCopyPrices(fresh.prints, progress)
+  const english = new Map<string, PrintPrice>()
+  for (const card of cards) {
+    const row = fresh.cards.get(`${card.set_code}/${card.number}`)
+    if (row) english.set(card.id, row)
+  }
+  const priced = await refreshCopyPrices(fresh.prints, english, progress)
   progress(`Fertig: ${rows.length} von ${cards.length} Karten, ${priced} Exemplare aktualisiert.`)
 }
 
@@ -147,17 +153,16 @@ export async function refreshPrivatePrices(progress: (text: string) => void) {
   const cards = await fetchAll<PrivateCard>('private_cards', 'print_id')
   const prices = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
   const changed = cards
-    .map((c) => {
+    .map((c) => ({
+      print_id: c.print_id,
       // Your own cards carry a finish, so a foil takes the foil price.
-      const print = prices.prints.get(c.print_id)
-      const plain = prices.cards.get(`${c.set_code}/${c.number}`)?.price_eur ?? null
-      const price = print
-        ? c.finish === 'nonfoil'
-          ? print.price_eur
-          : print.price_eur_foil
-        : plain
-      return { print_id: c.print_id, price_eur: price, old: c.price_eur }
-    })
+      price_eur: priceFor(
+        c.finish,
+        prices.prints.get(c.print_id),
+        prices.cards.get(`${c.set_code}/${c.number}`),
+      ),
+      old: c.price_eur,
+    }))
     .filter((c) => c.price_eur !== null && c.price_eur !== c.old)
     .map((c) => ({ print_id: c.print_id, price_eur: c.price_eur! }))
 
