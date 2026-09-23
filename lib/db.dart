@@ -185,11 +185,15 @@ class Db {
 
   /// Both return how many copies of the card exist afterwards. A foil is its
   /// own stack, so it does not turn the copies you already have into foils.
+  /// [setCode] and [number] say which printing was scanned, so the website
+  /// can tell a promo from the card's own printing.
   static Future<int> addCopy(
     String printId,
     String cardId,
     String lang, [
     String finish = 'nonfoil',
+    String? setCode,
+    String? number,
   ]) async =>
       await _sb.rpc(
             'add_copy',
@@ -198,6 +202,8 @@ class Db {
               'p_card_id': cardId,
               'p_lang': lang,
               'p_finish': finish,
+              'p_set': setCode,
+              'p_number': number,
             },
           )
           as int;

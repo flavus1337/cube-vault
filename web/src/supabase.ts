@@ -66,6 +66,9 @@ export type Copy = {
   finish: string
   /** What this printing in this finish costs; null falls back to the card. */
   price_eur: number | null
+  /** Which printing this copy is, e.g. "psdc" "1★"; null for older rows. */
+  set_code: string | null
+  number: string | null
 }
 
 export type CardEvent = {

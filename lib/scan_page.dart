@@ -289,6 +289,8 @@ class _ScanPageState extends State<ScanPage> {
               card['id'] as String,
               found.lang,
               _settings.finish,
+              found.setCode,
+              found.number,
             );
     } catch (e) {
       debugPrint('save ${hit.key} failed: $e');
@@ -669,6 +671,8 @@ class _ScanPageState extends State<ScanPage> {
                                             lastCard['id'] as String,
                                             last.lang,
                                             _settings.finish,
+                                            last.setCode,
+                                            last.number,
                                           );
                                     setState(() => _added++);
                                     _showAdded(lastCard, qty);

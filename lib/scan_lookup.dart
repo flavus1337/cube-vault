@@ -7,6 +7,9 @@ import 'scryfall.dart';
 typedef Found = ({
   String printId,
   String lang,
+  /// The printing that was scanned, for the copy row.
+  String setCode,
+  String number,
   Map<String, Object?>? card,
   String? problem,
   // The user picked this card in the dialog, so the read name must not
@@ -83,12 +86,16 @@ class CardLookup {
     if (json == null || base == null) return null;
     final printId = json['id'] as String;
     final lang = json['lang'] as String;
+    final printSet = '${json['set']}';
+    final printNumber = '${json['collector_number']}';
     final setCode = base['set'] as String;
     final oracleId = oracleIdOf(base);
     if (oracleId == null) {
       return (
         printId: printId,
         lang: lang,
+        setCode: printSet,
+        number: printNumber,
         card: null,
         problem: 'Karte ohne Oracle-ID',
         confirmed: confirmed,
@@ -102,6 +109,8 @@ class CardLookup {
           return (
             printId: printId,
             lang: lang,
+            setCode: printSet,
+            number: printNumber,
             card: null,
             problem: '${base['set_name']} ist nicht im Cube',
             confirmed: confirmed,
@@ -121,6 +130,8 @@ class CardLookup {
             return (
               printId: printId,
               lang: lang,
+              setCode: printSet,
+              number: printNumber,
               card: null,
               problem: '${base['set_name']} ist nicht im Cube',
               confirmed: confirmed,
@@ -149,6 +160,8 @@ class CardLookup {
     return (
       printId: printId,
       lang: lang,
+      setCode: printSet,
+      number: printNumber,
       card: card,
       problem: problem,
       confirmed: confirmed,
@@ -168,6 +181,8 @@ class CardLookup {
     return (
       printId: json['id'] as String,
       lang: json['lang'] as String,
+      setCode: '${json['set']}',
+      number: '${json['collector_number']}',
       // The oracle id groups prints of the same card while scanning.
       card: {...row, 'id': row['oracle_id']},
       problem: null,
