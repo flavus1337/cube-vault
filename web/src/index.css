@@ -106,6 +106,10 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-soft); box-shadow: var(--shadow);
 }
+/* On a wide screen the search rides along; the top bar is one row there. */
+@media (min-width: 861px) {
+  .page > .toolbar { position: sticky; top: 73px; z-index: 1; background: var(--panel-raised); }
+}
 .toolbar input[type='search'] { flex: 1 1 220px; min-width: 0; }
 .toolbar select { max-width: 190px; }
 .toolbar #filters { white-space: nowrap; }
@@ -239,7 +243,8 @@ dialog.filter-dialog::backdrop { background: rgb(9 7 6 / .72); backdrop-filter: 
   border-radius: 4.8% / 3.4%; background: var(--panel); text-align: left; box-shadow: 0 7px 18px rgb(0 0 0 / .2);
 }
 .tile:hover, .tile:focus-visible { border-color: var(--brass); transform: translateY(-2px); box-shadow: 0 12px 24px rgb(0 0 0 / .32); }
-.tile img { width: 100%; aspect-ratio: 488 / 680; border-radius: 4.2% / 2.9%; display: block; background: var(--panel); }
+.tile img { width: 100%; aspect-ratio: 488 / 680; border-radius: 4.2% / 2.9%; display: block;
+  background: var(--panel); animation: appear 260ms ease-out; }
 .tile.missing img { opacity: .55; }
 .tile.excluded img { filter: grayscale(1); opacity: .4; }
 .noimg { aspect-ratio: 488 / 680; border-radius: 8px; background: var(--panel-raised); padding: 14px; font-family: ui-serif, Georgia, serif; }
@@ -258,6 +263,14 @@ dialog.detail {
   box-shadow: 0 28px 70px rgb(0 0 0 / .56);
 }
 dialog.detail::backdrop { background: rgb(9 7 6 / .82); backdrop-filter: blur(3px); }
+/* A card that rises into view instead of appearing out of nowhere. */
+dialog.detail[open] { animation: rise 160ms ease-out; }
+dialog.detail[open]::backdrop, dialog.filter-dialog[open]::backdrop { animation: fade 160ms ease-out; }
+dialog.filter-dialog[open] { animation: slide-in 180ms ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes slide-in { from { transform: translateX(100%); } }
+@keyframes appear { from { opacity: 0; } }
 /* Card on the left, everything you can read or press on the right. */
 .detail-grid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 22px; padding: 20px; }
 .detail-art img { width: 100%; border-radius: 4.5% / 3.2%; display: block; background: var(--panel-soft); }
@@ -445,6 +458,7 @@ tr.waiting td { background: #e8a24a14; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  dialog[open], dialog[open]::backdrop, .tile img { animation: none !important; }
   .tile:hover, .tile:focus-visible, .pip:hover, .pip:focus-visible { transform: none; }
 }
 

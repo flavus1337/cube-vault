@@ -539,7 +539,15 @@ export default function CubePage({ role }: { role: Role }) {
         <CardSkeleton count={12} />
       ) : !list.length ? (
         <p className="status">
-          {cubeSets.length ? 'Keine Karten gefunden.' : 'Noch keine Karten. Scanne Karten mit der App.'}
+          {!cubeSets.length
+            ? 'Noch keine Karten. Scanne Karten mit der App.'
+            : show === 'wanted'
+              ? 'Die Einkaufsliste ist leer. Setz eine Karte über ihre Detailansicht darauf.'
+              : show === 'extra'
+                ? 'Keine Karte liegt mehrfach im Cube.'
+                : show === 'missing' && budget
+                  ? 'Für dieses Budget reicht keine der fehlenden Karten.'
+                  : 'Keine Karten gefunden.'}
         </p>
       ) : (
         <div className="grid">
