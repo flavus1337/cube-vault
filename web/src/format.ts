@@ -10,12 +10,6 @@ export function summary(
   return missing?.cards ? `${line} · ${missing.cards} fehlen · ${euro(missing.value)}` : line
 }
 
-export const RARITY: Record<string, string> = {
-  common: 'Gewöhnlich',
-  uncommon: 'Ungewöhnlich',
-  rare: 'Selten',
-  mythic: 'Mythisch selten',
-}
 
 /** Sharpest Scryfall image (745×1040 PNG), only worth it in the detail view. */
 export const png = (url: string) => url.replace('/normal/', '/png/').replace('.jpg', '.png')

@@ -2,134 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
 import { useCube } from './cube'
-import { euro, RARITY, summary } from './format'
+import { euro, summary } from './format'
+import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { loadTags } from './tags'
 import { canEdit, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
-const COLORS = ['W', 'U', 'B', 'R', 'G', 'C']
-const COLOR_LABELS: Record<string, string> = {
-  W: 'Weiß',
-  U: 'Blau',
-  B: 'Schwarz',
-  R: 'Rot',
-  G: 'Grün',
-  C: 'Farblos',
-}
-// German label with the words to look for in the type line (German or English).
-const TYPES: [string, RegExp][] = [
-  ['Kreatur', /Kreatur|Creature/i],
-  ['Land', /Land/i],
-  ['Spontanzauber', /Spontanzauber|Instant/i],
-  ['Hexerei', /Hexerei|Sorcery/i],
-  ['Verzauberung', /Verzauberung|Enchantment/i],
-  ['Artefakt', /Artefakt|Artifact/i],
-  ['Planeswalker', /Planeswalker/i],
-]
-
-// German keyword labels, taken from the German card texts on Scryfall
-// (tools/keywords_de.py). Keywords without a clean label stay English.
-const KEYWORDS: Record<string, string> = {
-  Affinity: 'Affinität',
-  Afterlife: 'Seelenwandlung',
-  Alliance: 'Allianz',
-  Ascend: 'Aufstieg',
-  Battalion: 'Bataillon',
-  Behold: 'Erblicken',
-  Bloodrush: 'Blutrausch',
-  Bloodthirst: 'Blutdurst',
-  Changeling: 'Wandelwicht',
-  Converge: 'Konvergenz',
-  Convoke: 'Einberufen',
-  Crew: 'Bemannen',
-  Cycling: 'Umwandlung',
-  Deathtouch: 'Todesberührung',
-  Decayed: 'Verwesung',
-  Defender: 'Verteidiger',
-  'Double strike': 'Doppelschlag',
-  Dredge: 'Ausgraben',
-  Eerie: 'Unheimlich',
-  Enchant: 'Verzaubert',
-  Enrage: 'Erzürnen',
-  Equip: 'Ausrüsten',
-  Escape: 'Befreiung',
-  Evoke: 'Herbeirufen',
-  Evolve: 'Weiterentwicklung',
-  Exhaust: 'Überstrapazieren',
-  Extort: 'Abnötigen',
-  Ferocious: 'Wildheit',
-  'First strike': 'Erstschlag',
-  Flash: 'Aufblitzen',
-  Flashback: 'Rückblende',
-  Flurry: 'Zaubergestöber',
-  Flying: 'Fliegend',
-  Forage: 'Hamstern',
-  Forecast: 'Vorhersage',
-  Forestcycling: 'Waldumwandlung',
-  Forestwalk: 'Waldtarnung',
-  Graft: 'Pfropfen',
-  Harmonize: 'Harmonisieren',
-  Haste: 'Eile',
-  Haunt: 'Spuk',
-  Hellbent: 'Versessenheit',
-  Hexproof: 'Fluchsicher',
-  Hideaway: 'Refugium',
-  Impending: 'Unheilsdrohend',
-  Imprint: 'Einprägen',
-  Improvise: 'Improvisieren',
-  Indestructible: 'Unzerstörbar',
-  Islandcycling: 'Inselumwandlung',
-  'Job select': 'Auftragsauswahl',
-  'Jump-start': 'Katalyse',
-  Kicker: 'Bonus',
-  Landfall: 'Landung',
-  Landwalk: 'Landtarnung',
-  'Level Up': 'Stufe aufsteigen',
-  Lifelink: 'Lebensverknüpfung',
-  Magecraft: 'Magiefertigkeit',
-  'Max speed': 'Maximaltempo',
-  Menace: 'Bedrohlich',
-  Metalcraft: 'Metallkunst',
-  Mill: 'Millen',
-  Mobilize: 'Mobilisieren',
-  Morbid: 'Morbide',
-  Mountaincycling: 'Gebirgsumwandlung',
-  Offspring: 'Nachwuchs',
-  Overload: 'Überlast',
-  Parley: 'Verhandlungen',
-  Plainscycling: 'Ebenenumwandlung',
-  Protection: 'Schutz',
-  Prowess: 'Bravour',
-  Raid: 'Überfall',
-  Ravenous: 'Unersättlich',
-  Reach: 'Reichweite',
-  Renew: 'Erneuerung',
-  Replicate: 'Reproduktion',
-  Riot: 'Aufruhr',
-  Saddle: 'Aufsatteln',
-  Scavenge: 'Ausplündern',
-  Shroud: 'Verhüllt',
-  Spectacle: 'Spektakel',
-  'Start your engines!': 'Starte die Motoren',
-  Storm: 'Sturm',
-  Survival: 'Überlebenskunst',
-  Suspend: 'Aussetzen',
-  Swampcycling: 'Sumpfumwandlung',
-  Swampwalk: 'Sumpftarnung',
-  'Tempting offer': 'Verlockendes Angebot',
-  Threshold: 'Grenzwert',
-  Tiered: 'Stufenmagie',
-  Toxic: 'Toxisch',
-  Trample: 'Verursacht Trampelschaden',
-  Transmute: 'Transmutation',
-  Unleash: 'Entfesselt',
-  Valiant: 'Tapfer',
-  Vanishing: 'Verschwinden',
-  Vigilance: 'Wachsamkeit',
-  Ward: 'Abwehr',
-}
-const keywordLabel = (key: string) => KEYWORDS[key] ?? key
 
 type AdvancedFilters = {
   colors: Set<string>
@@ -319,7 +198,7 @@ export default function CubePage({ role }: { role: Role }) {
         (!rarities.length || rarities.includes(c.rarity)) &&
         (!cmcs.length || cmcs.some((v) => (v === '7' ? c.cmc >= 7 : c.cmc === Number(v)))) &&
         (!cardTypes.length ||
-          cardTypes.some((label) => TYPES.find(([name]) => name === label)?.[1].test(type(c)) ?? false)) &&
+          cardTypes.some((label) => TYPES.find(([name]) => name === label)?.[2].test(type(c)) ?? false)) &&
         colorsMatch(c) &&
         (!keywordList.length || keywordList.some((key) => c.keywords.includes(key))) &&
         query.test({ card: c, copies: copies.get(c.id) ?? 0, tags: tags.get(c.id) }),

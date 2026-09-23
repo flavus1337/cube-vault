@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { cardmarket, euro, FINISHES, finishLabel, png, RARITY } from './format'
+import { cardmarket, euro, FINISHES, finishLabel, png } from './format'
+import { RARITY } from './mtg'
 import { versionLabel, versionPrice, versionsOf, type Version } from './versions'
 
 /* What the detail view needs. Own cards keep fewer fields than cube cards,
