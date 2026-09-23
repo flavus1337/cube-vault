@@ -1,15 +1,17 @@
 import { useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
 import CardDialog from './CardDialog'
+import CardTile from './CardTile'
 import { useCube } from './cube'
 import FilterDialog from './FilterDialog'
 import { type AdvancedFilters, type AppliedFilterKey } from './filters'
-import { summary } from './format'
+import { euro } from './format'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
 import { CardSkeleton } from './Skeleton'
+import Summary from './Summary'
 import { canEdit, supabase, type Card, type Role } from './supabase'
 import { loadTags } from './tags'
 import { useGrowing } from './useGrowing'
@@ -204,7 +206,6 @@ export default function CubePage({ role }: { role: Role }) {
   )
   const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
-  const missing = matched.filter((c) => !copies.get(c.id))
   /* Each stack is worth what its own printing and finish cost; only a stack
      without a price of its own falls back to the card's price. */
   const valueOf = (card: Card) =>
@@ -212,15 +213,17 @@ export default function CubePage({ role }: { role: Role }) {
       (sum, row) => sum + row.qty * (row.price_eur ?? card.price_eur ?? 0),
       0,
     )
-  const line = summary(
-    {
-      cards: owned.length,
-      copies: matched.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0),
-      value: matched.reduce((sum, c) => sum + valueOf(c), 0),
-    },
+  const missing = matched.filter((c) => !copies.get(c.id))
+  const figures = {
+    cards: owned.length,
+    copies: matched.reduce((sum, c) => sum + (copies.get(c.id) ?? 0), 0),
+    value: matched.reduce((sum, c) => sum + valueOf(c), 0),
     // Every missing card counts once: what one copy each would cost.
-    { cards: missing.length, value: missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0) },
-  )
+    missing: {
+      cards: missing.length,
+      value: missing.reduce((sum, c) => sum + (c.price_eur ?? 0), 0),
+    },
+  }
 
   // Editors change the number of scanned copies right here.
   /* [printId] and [finish] say which stack changes: the foil of a printing is
@@ -403,12 +406,15 @@ export default function CubePage({ role }: { role: Role }) {
           onDiscard={closeFilters}
         />
       )}
-      <p className="muted summary">
-        {line}
-        {show === 'missing' && (
-          <span className="hint"> · Karten aus geladenen Sets, von denen ihr keine Kopie habt</span>
-        )}
-      </p>
+      <Summary
+        {...figures}
+        highlight={show === 'missing' ? 'missing' : 'owned'}
+        hint={
+          show === 'missing'
+            ? 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt.'
+            : undefined
+        }
+      />
 
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
@@ -423,17 +429,25 @@ export default function CubePage({ role }: { role: Role }) {
           {visible.map((c) => {
             const count = copies.get(c.id) ?? 0
             return (
-              <button
+              <CardTile
                 key={c.id}
-                className={`tile${c.excluded ? ' excluded' : ''}${count ? '' : ' missing'}`}
-                title={`${name(c)} — ${type(c)}`}
+                image={c.image}
+                name={`${name(c)} — ${type(c)}`}
+                look={`${c.excluded ? 'excluded' : ''} ${count ? '' : 'missing'}`.trim()}
+                meta={`${c.set_code.toUpperCase()} #${c.number} · ${euro(c.price_eur)} · ${RARITY[c.rarity] ?? c.rarity}`}
+                note={
+                  count ? (
+                    `${count}× im Cube`
+                  ) : (
+                    <>
+                      fehlt · {euro(c.price_eur)}
+                    </>
+                  )
+                }
                 onClick={() => setSelected(c)}
               >
-                {c.image ? <img src={c.image} alt={name(c)} loading="lazy" /> : <div className="noimg">{name(c)}</div>}
-                {!count && <span className="sr-only">Fehlt in der Sammlung</span>}
-                {count > 0 && <span className="badge">{count}×</span>}
-                {c.excluded && <span className="badge out">ausgeschlossen</span>}
-              </button>
+                {c.excluded && <span className="warn"> · ausgeschlossen</span>}
+              </CardTile>
             )
           })}
         </div>

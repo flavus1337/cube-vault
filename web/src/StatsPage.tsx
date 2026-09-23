@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useCube } from './cube'
 import { usePrivateCards } from './mine'
 import { RowSkeleton } from './Skeleton'
-import { summary } from './format'
+import Summary from './Summary'
 import { COLOR_GROUPS, colorGroupOf, isLand, RARITIES, TYPES } from './mtg'
 import { type Card, type Copy, type PrivateCard } from './supabase'
 
@@ -151,9 +151,12 @@ export default function StatsPage() {
         <p className="status">Noch keine Karten.</p>
       ) : (
         <>
-          <p className="muted summary">
-            {summary(stats, missing ?? undefined)}
-          </p>
+          <Summary
+            cards={stats.cards}
+            copies={stats.copies}
+            value={stats.value}
+            missing={missing}
+          />
           {source === 'cube' && (
             <p className="muted">
               Für einen Draft mit acht Spielern und drei Päckchen zu 15 Karten braucht ihr 360 Karten.
