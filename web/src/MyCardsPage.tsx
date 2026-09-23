@@ -164,7 +164,8 @@ function CardDialog(props: {
   return (
     <CardDetail
       card={card}
-      note={`${copies}× vorhanden · ${euro(value)}`}
+      noteLabel="Bei dir"
+      note={`${copies} ${copies === 1 ? 'Kopie' : 'Kopien'} · ${euro(value)}`}
       ownedPrints={owned.flatMap((row) => [row.print_id, `${row.set_code}/${row.number}`])}
       ownedLabel="bei dir"
       onAddVersion={onAddVersion}

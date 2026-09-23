@@ -23,8 +23,10 @@ export type DetailCard = {
 /** The card in big, with room for the buttons each page brings along. */
 export default function CardDetail(props: {
   card: DetailCard
-  /** Added to the line with set, rarity and price, e.g. "3× im Deck". */
+  /** What you own, e.g. "1 Kopie · 0,22 €". */
   note?: ReactNode
+  /** The word over it, e.g. "Im Cube" or "Bei dir". */
+  noteLabel?: string
   children?: ReactNode
   actions?: ReactNode
   /** Scryfall ids of the printings you own, marked in the version list. */
@@ -35,7 +37,8 @@ export default function CardDetail(props: {
   onAddVersion?: (version: Version, finish: string) => Promise<void>
   onClose: () => void
 }) {
-  const { card, note, children, actions, ownedPrints, ownedLabel, onAddVersion, onClose } = props
+  const { card, note, noteLabel, children, actions, ownedPrints, ownedLabel, onAddVersion, onClose } =
+    props
   const ref = useRef<HTMLDialogElement>(null)
   const [hiRes, setHiRes] = useState<string | null>(null)
   const title = card.name_de || card.name
@@ -58,6 +61,9 @@ export default function CardDetail(props: {
   const rules = card.text_de || card.oracle_text
   return (
     <dialog ref={ref} className="detail" aria-labelledby="card-detail-title" onClose={onClose}>
+      <button className="dialog-close detail-close" aria-label="Schließen" onClick={() => ref.current?.close()}>
+        ×
+      </button>
       <div className="detail-grid">
         <div className="detail-art">
           {card.image && <img src={hiRes ?? card.image} alt={title} />}
@@ -65,12 +71,33 @@ export default function CardDetail(props: {
         <div className="detail-body">
           <h2 id="card-detail-title">{title}</h2>
           {card.name_de && card.name_de !== card.name && <p className="muted">{card.name}</p>}
-          <p className="detail-type">{card.type_de || card.type_line}</p>
-          <p className="muted detail-print">
-            {card.set_code.toUpperCase()} #{card.number}
-            {card.rarity && ` · ${RARITY[card.rarity] ?? card.rarity}`} · {euro(card.price_eur)}
-            {note && <> · {note}</>}
-          </p>
+
+          {/* The facts the picture does not carry, each under its word. */}
+          <dl className="deck-stats detail-facts">
+            <div>
+              <dt>Druck</dt>
+              <dd>
+                {card.set_code.toUpperCase()} #{card.number}
+              </dd>
+            </div>
+            {card.rarity && (
+              <div>
+                <dt>Seltenheit</dt>
+                <dd>{RARITY[card.rarity] ?? card.rarity}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Preis</dt>
+              <dd>{euro(card.price_eur)}</dd>
+            </div>
+            {note && (
+              <div className="lead">
+                <dt>{noteLabel ?? 'Im Cube'}</dt>
+                <dd>{note}</dd>
+              </div>
+            )}
+          </dl>
+
           {rules && <p className="rules">{rules}</p>}
           {children}
           <Versions
@@ -79,18 +106,13 @@ export default function CardDetail(props: {
             ownedLabel={ownedLabel ?? 'im Cube'}
             onAdd={onAddVersion}
           />
-          <p>
-            <a href={cardmarket(card.name)} target="_blank" rel="noopener">
-              Bei Cardmarket suchen
-            </a>
-          </p>
         </div>
       </div>
       <div className="actions">
+        <a className="button-link" href={cardmarket(card.name)} target="_blank" rel="noopener">
+          Bei Cardmarket suchen
+        </a>
         {actions}
-        <button className="primary" onClick={() => ref.current?.close()}>
-          Schließen
-        </button>
       </div>
     </dialog>
   )
@@ -122,8 +144,8 @@ function Versions(props: {
   if (!card.oracle_id) return null
   return (
     <div className="versions">
-      <button className="link-button" onClick={() => setOpen(!open)} aria-expanded={open}>
-        {open ? 'Versionen ausblenden' : 'Andere Versionen zeigen'}
+      <button onClick={() => setOpen(!open)} aria-expanded={open}>
+        {open ? 'Drucke ausblenden' : 'Alle Drucke dieser Karte'}
       </button>
       {open && error && <p className="warn">Versionen laden fehlgeschlagen: {error}</p>}
       {open && !list && !error && <p className="muted">Lädt …</p>}
@@ -189,6 +211,7 @@ export function CopyRows(props: {
 }) {
   const { rows, onChange, onAdd } = props
   const [busy, setBusy] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   async function run(work: () => Promise<void>) {
     setBusy(true)
@@ -202,6 +225,7 @@ export function CopyRows(props: {
   const missing = FINISHES.filter(([key]) => !rows.some((row) => row.finish === key))
   return (
     <div className="copy-rows">
+      <h3 className="side-title">Kopien</h3>
       {rows.map((row) => (
         <div key={`${row.print_id}-${row.finish}`} className="copy-row">
           <span>
@@ -230,11 +254,17 @@ export function CopyRows(props: {
       ))}
       {onAdd && missing.length > 0 && (
         <div className="copy-add">
-          {missing.map(([key, label]) => (
-            <button key={key} disabled={busy} onClick={() => run(() => onAdd(key))}>
-              + {label}
+          {adding ? (
+            missing.map(([key, label]) => (
+              <button key={key} disabled={busy} onClick={() => run(() => onAdd(key))}>
+                + {label}
+              </button>
+            ))
+          ) : (
+            <button className="link-button" onClick={() => setAdding(true)}>
+              Andere Folierung eintragen
             </button>
-          ))}
+          )}
         </div>
       )}
     </div>

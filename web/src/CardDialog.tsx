@@ -39,7 +39,8 @@ export default function CardDialog(props: {
   return (
     <CardDetail
       card={card}
-      note={`${copies}× gescannt${copies ? ` · ${euro(value)}` : ''}`}
+      noteLabel="Im Cube"
+      note={copies ? `${copies} ${copies === 1 ? 'Kopie' : 'Kopien'} · ${euro(value)}` : 'keine Kopie'}
       onClose={onClose}
       ownedPrints={[
         ...prints.map((row) => row.print_id),
