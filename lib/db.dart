@@ -34,31 +34,6 @@ class Db {
     return row?['role'] as String?;
   }
 
-  /// Cards of all sets in the cube, with `qty` = scanned copies of all prints.
-  /// Cards with 0 copies are only there after a whole-set import.
-  static Future<List<Map<String, Object?>>> cubeCards() async {
-    final rows = <Map<String, Object?>>[];
-    // Supabase returns at most 1000 rows per request, so read page by page.
-    for (var from = 0; ; from += 1000) {
-      final page = await _sb
-          .from('cards')
-          .select('*, sets!inner(name, in_cube), copies(print_id, qty)')
-          .eq('sets.in_cube', true)
-          .eq('excluded', false)
-          .order('id')
-          .range(from, from + 999);
-      rows.addAll(page);
-      if (page.length < 1000) break;
-    }
-    for (final r in rows) {
-      r['qty'] = (r['copies'] as List).fold<int>(
-        0,
-        (s, c) => s + (c['qty'] as int),
-      );
-    }
-    return rows;
-  }
-
   /// The cube card for a scanned print: same set, same oracle id.
   static Future<Map<String, Object?>?> findCard(
     String setCode,
