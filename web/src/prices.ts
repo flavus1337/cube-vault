@@ -28,6 +28,8 @@ async function scryfall(url: string, pause = 500) {
    take the price of the English print, the scanned copies the price of their
    own print, found by its Scryfall id. */
 export async function pricesOfSets(sets: string[], progress: (text: string) => void) {
+  /** Which printing a Scryfall id belongs to, e.g. "fdn" "134". */
+  const printings = new Map<string, { set_code: string; number: string }>()
   /* Keyed "set/collector number", English only. Scryfall prices only the
      English printing of a set, so a German copy borrows its prices. */
   const cards = new Map<
@@ -62,6 +64,7 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
           price_eur: money(card.prices?.eur),
           price_eur_foil: money(card.prices?.eur_foil),
         })
+        printings.set(card.id, { set_code: set, number: card.collector_number })
         // A German print has no price of its own; then the old one stays.
         if (card.lang === 'en') {
           cards.set(`${set}/${card.collector_number}`, {
@@ -74,7 +77,7 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
       url = page.has_more && page.next_page ? page.next_page : null
     }
   }
-  return { cards, prints }
+  return { cards, prints, printings }
 }
 
 /* Most copies are printings of the sets the cube holds, so their price came
@@ -82,6 +85,8 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
    foil, is asked for on its own. */
 async function refreshCopyPrices(
   known: Map<string, PrintPrice>,
+  /** Printings the set search already named. */
+  cubePrints: Map<string, { set_code: string; number: string }>,
   /** Per card the prices of its English printing, for prints without any. */
   english: Map<string, PrintPrice>,
   progress: (text: string) => void,
@@ -90,18 +95,32 @@ async function refreshCopyPrices(
   /* A plain copy of the card's own printing is already covered by the card
      price, so only foils and other printings are looked at. */
   const copies = all.filter((copy) => copy.finish !== 'nonfoil' || copy.print_id !== copy.card_id)
-  const rows: { print_id: string; finish: string; price_eur: number | null }[] = []
+  const rows: {
+    print_id: string
+    finish: string
+    price_eur: number | null
+    set_code?: string
+    number?: string
+  }[] = []
   const strangers = copies.filter((copy) => !known.has(copy.print_id))
+  /** Which printing a copy is, for the rows that never learned it. */
+  const printings = new Map<string, { set_code: string; number: string }>()
 
   for (const [i, copy] of strangers.entries()) {
     progress(`Preise fremder Drucke … ${i + 1} von ${strangers.length}`)
-    const card: { prices?: { eur?: string | null; eur_foil?: string | null } } | null =
-      await scryfall(`https://api.scryfall.com/cards/${copy.print_id}`, 120)
+    const card: {
+      set?: string
+      collector_number?: string
+      prices?: { eur?: string | null; eur_foil?: string | null }
+    } | null = await scryfall(`https://api.scryfall.com/cards/${copy.print_id}`, 120)
     if (!card) continue
     known.set(copy.print_id, {
       price_eur: money(card.prices?.eur),
       price_eur_foil: money(card.prices?.eur_foil),
     })
+    if (card.set && card.collector_number) {
+      printings.set(copy.print_id, { set_code: card.set, number: card.collector_number })
+    }
   }
 
   for (const copy of copies) {
@@ -112,6 +131,7 @@ async function refreshCopyPrices(
       print_id: copy.print_id,
       finish: copy.finish,
       price_eur: priceFor(copy.finish, own, fallback),
+      ...(copy.set_code ? {} : (printings.get(copy.print_id) ?? cubePrints.get(copy.print_id) ?? {})),
     })
   }
 
@@ -145,7 +165,7 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     const row = fresh.cards.get(`${card.set_code}/${card.number}`)
     if (row) english.set(card.id, row)
   }
-  const priced = await refreshCopyPrices(fresh.prints, english, progress)
+  const priced = await refreshCopyPrices(fresh.prints, fresh.printings, english, progress)
   progress(`Fertig: ${rows.length} von ${cards.length} Karten, ${priced} Exemplare aktualisiert.`)
 }
 

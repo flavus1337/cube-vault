@@ -227,6 +227,7 @@ export default function CubePage({ role }: { role: Role }) {
     printId?: string,
     finish = 'nonfoil',
     price?: number | null,
+    printing?: { set: string; number: string },
   ) {
     const known = prints.get(card.id) ?? []
     const id = printId ?? known[0]?.print_id ?? card.id
@@ -236,7 +237,12 @@ export default function CubePage({ role }: { role: Role }) {
       p_source: 'web', // the history says where a change came from
       p_finish: finish,
       ...(delta > 0
-        ? { p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en', p_price: price ?? null }
+        ? {
+            p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en',
+            p_price: price ?? null,
+            p_set: printing?.set ?? null,
+            p_number: printing?.number ?? null,
+          }
         : {}),
     })
     if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
@@ -447,8 +453,8 @@ export default function CubePage({ role }: { role: Role }) {
           copies={copies.get(selected.id) ?? 0}
           prints={prints.get(selected.id) ?? []}
           editable={canEdit(role)}
-          onChangeCopies={(delta, printId, finish, price) =>
-            changeCopies(selected, delta, printId, finish, price)
+          onChangeCopies={(delta, printId, finish, price, printing) =>
+            changeCopies(selected, delta, printId, finish, price, printing)
           }
           onToggleExcluded={() => toggleExcluded(selected)}
           onClose={() => setSelected(null)}

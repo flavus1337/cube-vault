@@ -12,6 +12,7 @@ export default function CardDialog(props: {
     printId?: string,
     finish?: string,
     price?: number | null,
+    printing?: { set: string; number: string },
   ) => Promise<void>
   onToggleExcluded: () => void
   onClose: () => void
@@ -24,7 +25,14 @@ export default function CardDialog(props: {
       print_id: row.print_id,
       finish: row.finish ?? 'nonfoil',
       qty: row.qty,
-      label: row.lang.toUpperCase(),
+      /* Which printing this stack is. Without it a Comic-Con foil reads the
+         same as a foil of the card's own printing. */
+      label: [
+        row.set_code ? `${row.set_code.toUpperCase()} #${row.number}` : null,
+        row.lang.toUpperCase(),
+      ]
+        .filter(Boolean)
+        .join(' · '),
       /* The card price is the plain one of the main printing, so it stands in
          only for plain copies. A foil keeps its own price or shows none. */
       price: row.price_eur ?? (row.finish === 'foil' || row.finish === 'etched' ? null : card.price_eur),
@@ -54,6 +62,7 @@ export default function CardDialog(props: {
                 version.id,
                 finish,
                 finish === 'nonfoil' ? version.price_eur : version.price_eur_foil,
+                { set: version.set, number: version.number },
               )
           : undefined
       }
