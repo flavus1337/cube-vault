@@ -228,8 +228,9 @@ export default function CubePage({ role }: { role: Role }) {
   }, [cards, sets, copies, tags, text, colors, exactColors, rarities, cardTypes, cmcs, keywordList, setCodes, sort, showExcluded])
 
   // The grid shows one of the three views, the summary always the whole filter.
-  const list = matched.filter(
-    (c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)),
+  const list = useMemo(
+    () => matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))),
+    [matched, show, copies],
   )
   const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
