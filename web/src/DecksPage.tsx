@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { readMine, writeMine } from './cache'
 import CardDetail from './CardDetail'
 import { useCube } from './cube'
 import { euro } from './format'
 import { COLOR_GROUPS, colorGroupOf, isLand as isLandType, RARITIES, RARITY, typeOf, TYPES } from './mtg'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
+import { usePrivateCards } from './mine'
 import { useNotices } from './notices'
 import { parseQuery } from './query'
 import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
@@ -111,7 +111,7 @@ function drawTen(cards: { row: DeckCard; card: PoolCard }[]) {
 export default function DecksPage() {
   const notices = useNotices()
   const cubeData = useCube()
-  const [privateCards, setPrivateCards] = useState<PrivateCard[]>(() => readMine() ?? [])
+  const { cards: privateCards, reload: reloadPrivate } = usePrivateCards()
   const [decks, setDecks] = useState<Deck[]>([])
   const [deckCards, setDeckCards] = useState<DeckCard[]>([])
   const [current, setCurrent] = useState('')
@@ -128,13 +128,6 @@ export default function DecksPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  /* Own cards are small and only you change them; the cube comes from the
-     shared cache. Putting a card into a deck writes one small row. */
-  async function loadPools() {
-    const rows = await fetchAll<PrivateCard>('private_cards', 'print_id')
-    setPrivateCards(rows)
-    writeMine(rows)
-  }
 
   async function loadDecks() {
     const [decks, deckCards] = await Promise.all([
@@ -148,7 +141,7 @@ export default function DecksPage() {
 
   useEffect(() => {
     let stop = false
-    Promise.all([loadPools(), loadDecks()])
+    loadDecks()
       .catch((e) => {
         if (!stop) setError((e as Error).message)
       })
@@ -461,7 +454,7 @@ export default function DecksPage() {
                         setBusyLands(true)
                         try {
                           await addLands(current, wantedLands)
-                          await Promise.all([loadPools(), loadDecks()])
+                          await Promise.all([reloadPrivate(), loadDecks()])
                         } catch (e) {
                           notices.say(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`, 'error')
                         } finally {
