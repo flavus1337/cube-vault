@@ -8,6 +8,7 @@ import { addLands } from './lands'
 import { BASICS, pipsOf, suggestLands } from './mana'
 import { copyToClipboard, wantList } from './prices'
 import { usePrivateCards } from './mine'
+import { useNarrow } from './useNarrow'
 import { useNotices } from './notices'
 import { parseQuery } from './query'
 import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
@@ -127,6 +128,10 @@ export default function DecksPage() {
   const [deckSort, setDeckSort] = useState('cmc')
   const [deckText, setDeckText] = useState('')
   const [busyLands, setBusyLands] = useState(false)
+  /* On a phone the deck fills the screen and the cards to add sit far below
+     it. There they are a bar at the top that opens when you need it. */
+  const narrow = useNarrow()
+  const [poolOpen, setPoolOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -556,8 +561,19 @@ export default function DecksPage() {
             </div>
           </section>
 
-          <section className="pool">
-            <h3 className="side-title">Karten hinzufügen</h3>
+          <section className={`pool${narrow && !poolOpen ? ' folded' : ''}`}>
+            {narrow ? (
+              <button
+                className="pool-toggle"
+                aria-expanded={poolOpen}
+                onClick={() => setPoolOpen(!poolOpen)}
+              >
+                Karten hinzufügen
+                <span aria-hidden="true">{poolOpen ? '▲' : '▼'}</span>
+              </button>
+            ) : (
+              <h3 className="side-title">Karten hinzufügen</h3>
+            )}
             <div className="toolbar">
               <input
                 id="deck-search"

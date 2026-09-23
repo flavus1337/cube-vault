@@ -501,7 +501,13 @@ tr.waiting td { background: #e8a24a14; }
 @media (max-width: 860px) {
   .builder { grid-template-columns: minmax(0, 1fr); }
   .deck-head { grid-template-columns: minmax(0, 1fr); }
-  .pool { position: static; max-height: none; }
+  /* The cards to add ride along at the top; folded they are one bar. */
+  .pool { order: -1; position: sticky; top: 0; z-index: 2; max-height: none;
+    padding: 8px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .pool.folded { border-bottom: 0; }
+  .pool.folded > *:not(.pool-toggle) { display: none; }
+  .pool-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; font-weight: 700; }
 }
 
 .curve { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; height: 96px; margin: 8px 0 4px; }
