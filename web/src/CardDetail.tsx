@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cardmarket, euro, FINISHES, finishLabel, png } from './format'
 import { RARITY } from './mtg'
+import { CardHistory } from './CardHistory'
 import { versionLabel, versionPrice, versionsOf, type Version } from './versions'
 
 /* What the detail view needs. Own cards keep fewer fields than cube cards,
@@ -35,10 +36,22 @@ export default function CardDetail(props: {
   ownedLabel?: string
   /** Lets an editor put a printing from the list into the cube. */
   onAddVersion?: (version: Version, finish: string) => Promise<void>
+  /** Cube card id: who scanned it and when is worth knowing. */
+  historyOf?: string
   onClose: () => void
 }) {
-  const { card, note, noteLabel, children, actions, ownedPrints, ownedLabel, onAddVersion, onClose } =
-    props
+  const {
+    card,
+    note,
+    noteLabel,
+    children,
+    actions,
+    ownedPrints,
+    ownedLabel,
+    onAddVersion,
+    historyOf,
+    onClose,
+  } = props
   const ref = useRef<HTMLDialogElement>(null)
   const [hiRes, setHiRes] = useState<string | null>(null)
   const title = card.name_de || card.name
@@ -106,6 +119,7 @@ export default function CardDetail(props: {
             ownedLabel={ownedLabel ?? 'im Cube'}
             onAdd={onAddVersion}
           />
+          {historyOf && <CardHistory cardId={historyOf} />}
         </div>
       </div>
       <div className="actions">
