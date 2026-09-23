@@ -11,13 +11,25 @@ import { supabase, type Profile } from './supabase'
 
 const logout = () => supabase.auth.signOut()
 
+/** Every page of the site, in the order of the menu. */
+const PAGES: [string, string][] = [
+  ['/cube', 'Cube'],
+  ['/mine', 'Meine Karten'],
+  ['/decks', 'Decks'],
+  ['/stats', 'Auswertung'],
+  ['/history', 'Verlauf'],
+  ['/sets', 'Sets'],
+  ['/admin', 'Übersicht'],
+  ['/players', 'Spieler'],
+]
+
 /** The tab says where you are, and a new page starts at the top. */
-function usePageTitle(route: string, nav: string[][]) {
+function usePageTitle(route: string) {
   useEffect(() => {
-    const label = nav.find(([path]) => path === route)?.[1]
+    const label = PAGES.find(([path]) => path === route)?.[1]
     document.title = label ? `${label} · Cube Vault` : 'Cube Vault'
     scrollTo({ top: 0 })
-  }, [route, nav])
+  }, [route])
 }
 
 function useHashRoute() {
@@ -36,6 +48,8 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined)
   const route = useHashRoute()
   const userId = session?.user.id
+  // Above the early returns: hooks must run in the same order every render.
+  usePageTitle(route)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -111,17 +125,9 @@ export default function App() {
     )
   }
 
-  const nav: string[][] = [
-    ['/cube', 'Cube'],
-    ['/mine', 'Meine Karten'],
-    ['/decks', 'Decks'],
-    ['/stats', 'Auswertung'],
-    ['/history', 'Verlauf'],
-    ['/sets', 'Sets'],
-    ...(profile.role === 'admin' ? [['/admin', 'Übersicht'], ['/players', 'Spieler']] : []),
-  ]
-
-  usePageTitle(route, nav)
+  const nav = PAGES.filter(
+    ([path]) => profile.role === 'admin' || (path !== '/admin' && path !== '/players'),
+  )
 
   return (
     <>
