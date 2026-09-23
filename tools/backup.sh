@@ -97,19 +97,20 @@ for day in history/*/; do
   [ "$name" \< "$keep_from" ] && rm -rf "$day"
 done
 
-rows=$(grep -c '^INSERT\|^COPY' "history/$today/data.sql" || true)
-{
-  printf 'Stand: %s\nZeilenblöcke: %s\nAls Dateien: %s Tage ab %s\n' \
-    "$(date '+%d.%m.%Y %H:%M')" "$rows" "$(ls history | wc -l | tr -d ' ')" "$keep_from"
-} > STATUS.txt
-
-git add -A
-# --porcelain also sees files that are new; git diff alone would call the
-# first run "unchanged" and never commit anything.
-if [ -z "$(git status --porcelain)" ]; then
+# The dumps decide whether anything happened. STATUS.txt carries the time and
+# would otherwise make every run look like a change.
+git add -A history
+if [ -z "$(git status --porcelain -- history)" ]; then
   echo "$(date '+%F %T') nichts geändert"
   exit 0
 fi
+
+rows=$(grep -c '^INSERT\|^COPY' "history/$today/data.sql" || true)
+{
+  printf 'Geändert: %s\nZeilenblöcke: %s\nAls Dateien: %s Tage ab %s\n' \
+    "$(date '+%d.%m.%Y %H:%M')" "$rows" "$(ls history | wc -l | tr -d ' ')" "$keep_from"
+} > STATUS.txt
+git add -A
 
 git commit -q -m "Backup $(date '+%d.%m.%Y')"
 git push -q origin HEAD
