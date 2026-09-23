@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { readMine, writeMine } from './cache'
+import { useMemo, useState } from 'react'
 import CardDetail, { CopyRows } from './CardDetail'
 import { euro, finishLabel, summary } from './format'
+import { usePrivateCards } from './mine'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
-import { fetchAll, supabase, type PrivateCard } from './supabase'
+import { supabase, type PrivateCard } from './supabase'
 import { useGrowing } from './useGrowing'
 import { privateCardFrom, type Version } from './versions'
 
@@ -16,53 +16,18 @@ const type = (c: PrivateCard) => c.type_de || c.type_line
    rows of the player who is logged in. */
 export default function MyCardsPage() {
   const messages = useNotices()
-  const [cards, setCards] = useState<PrivateCard[]>(() => readMine() ?? [])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(!readMine())
+  const { cards, loading, error, reload } = usePrivateCards()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState('')
-  // Held by id, so the copy count in the dialog follows the reloaded rows.
+  // The card shown in the detail view, held by id so its numbers stay fresh.
   const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  async function load(quiet = false) {
-    try {
-      const rows = await fetchAll<PrivateCard>('private_cards', 'print_id')
-      setCards(rows)
-      writeMine(rows)
-      setError(null)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      if (!quiet) setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let stop = false
-    fetchAll<PrivateCard>('private_cards', 'print_id')
-      .then((rows) => {
-        if (stop) return
-        setCards(rows)
-        writeMine(rows)
-        setError(null)
-      })
-      .catch((e) => {
-        if (!stop) setError((e as Error).message)
-      })
-      .finally(() => {
-        if (!stop) setLoading(false)
-      })
-    return () => {
-      stop = true
-    }
-  }, [])
 
   /* A printing from the version list: Scryfall gives the card, the database
      puts it next to the ones you scanned. */
   async function addVersion(row: Record<string, unknown>) {
     const { error } = await supabase.rpc('add_private_copy', { card: row })
     if (error) return messages.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
-    load(true)
+    await reload()
   }
 
   async function change(card: PrivateCard, delta: number, finish = card.finish) {
@@ -72,7 +37,7 @@ export default function MyCardsPage() {
         : { p_print_id: card.print_id, p_finish: finish }),
     })
     if (error) return messages.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
-    load(true)
+    await reload()
   }
 
   const list = useMemo(() => {
@@ -115,7 +80,7 @@ export default function MyCardsPage() {
         <button
           onClick={() =>
             refreshPrivatePrices(setNotice)
-              .then(() => load(true))
+              .then(() => reload())
               .catch((e) => setNotice(`Fehler: ${e.message}`))
           }
         >
