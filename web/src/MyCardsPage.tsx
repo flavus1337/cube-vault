@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
 import { euro, finishLabel, summary } from './format'
+import { useGrowing } from './useGrowing'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
 import { privateCardFrom, type Version } from './versions'
@@ -79,6 +80,7 @@ export default function MyCardsPage() {
       .sort((a, b) => name(a).localeCompare(name(b), 'de'))
   }, [cards, text])
 
+  const { visible, more, sentinel } = useGrowing(list)
   const selected = cards.find((c) => key(c) === selectedId) ?? null
   // Every finish of a printing is its own stack.
   const sameCard = selected
@@ -133,7 +135,7 @@ export default function MyCardsPage() {
         </p>
       ) : (
         <div className="grid">
-          {list.map((c) => (
+          {visible.map((c) => (
             <div key={key(c)} className="tile private">
               <button
                 className="tile-open"
@@ -159,6 +161,11 @@ export default function MyCardsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {more > 0 && (
+        <div ref={sentinel} className="status">
+          Noch {more} Karten …
         </div>
       )}
 
