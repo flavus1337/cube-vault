@@ -11,6 +11,7 @@ import { APK_URL } from './links'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
+import { withinBudget } from './price'
 import { parseQuery } from './query'
 import { CardSkeleton } from './Skeleton'
 import Summary from './Summary'
@@ -45,6 +46,9 @@ export default function CubePage({ role }: { role: Role }) {
   const [filterDraft, setFilterDraft] = useState<AdvancedFilters | null>(null)
   const filterOpener = useRef<HTMLButtonElement>(null)
   const [notice, setNotice] = useState('')
+  /* Cheapest first, until the money is gone: 838 missing cards are a list
+     nobody can act on, "what do I get for 20 €" is one. */
+  const [budget, setBudget] = useState('')
 
   // Keywords that actually appear on the cards in the database.
   const keywords = useMemo(
@@ -217,10 +221,16 @@ export default function CubePage({ role }: { role: Role }) {
         .filter((c) => (copies.get(c.id) ?? 0) > 1)
         .sort((a, b) => extraValue(b) - extraValue(a))
     }
+    if (show === 'missing') {
+      const gap = matched
+        .filter((c) => !copies.get(c.id))
+        .sort((a, b) => (a.price_eur ?? 0) - (b.price_eur ?? 0))
+      return withinBudget(gap, Number(budget.replace(',', '.')))
+    }
     return matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)))
     // extraValue reads the same maps the memo already depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matched, show, copies, prints])
+  }, [matched, show, copies, prints, budget])
   const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
   /* Each stack is worth what its own printing and finish cost; only a stack
@@ -324,6 +334,20 @@ export default function CubePage({ role }: { role: Role }) {
           <option value="extra">Mehrfach vorhanden</option>
           <option value="all">Alle Karten</option>
         </select>
+        {show === 'missing' && (
+          <label className="budget">
+            Budget
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="z. B. 20"
+              aria-label="Budget in Euro"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+            />
+            €
+          </label>
+        )}
         <button className="link-button" onClick={() => setShowHelp(!showHelp)} aria-expanded={showHelp}>
           Suchhilfe
         </button>
@@ -440,7 +464,11 @@ export default function CubePage({ role }: { role: Role }) {
           highlight={show === 'missing' ? 'missing' : 'owned'}
           hint={
             show === 'missing'
-              ? 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt.'
+              ? budget
+                ? `Die günstigsten ${list.length} fehlenden Karten für zusammen ${euro(
+                    list.reduce((sum, c) => sum + (c.price_eur ?? 0), 0),
+                  )}.`
+                : 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt. Setz ein Budget, um die günstigsten zu sehen.'
               : undefined
           }
         />
