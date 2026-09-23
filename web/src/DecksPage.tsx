@@ -483,7 +483,8 @@ export default function DecksPage() {
       {selected && (
         <CardDetail
           card={selected}
-          note={`${selectedQty}× im Deck · ${selected.owned} vorhanden`}
+          noteLabel="In diesem Deck"
+          note={`${selectedQty} von ${selected.owned} vorhandenen`}
           onClose={() => setSelectedKey(null)}
         >
           <div className="copies">

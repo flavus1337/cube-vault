@@ -262,8 +262,18 @@ dialog.detail::backdrop { background: rgb(9 7 6 / .82); backdrop-filter: blur(3p
 .detail-body { min-width: 0; }
 .detail-body > p { margin: 4px 0; }
 dialog.detail h2 { margin: 0 0 2px; font-size: 24px; line-height: 1.15; }
-.detail-type { margin-top: 6px !important; }
-.detail-print { font-variant-numeric: tabular-nums; }
+/* The facts under their words, the way the grids read. */
+.detail-facts { margin: 14px 0 0; gap: 8px 22px; }
+.detail-facts dd { font-size: 15px; font-weight: 700; }
+.detail-facts .lead dt, .detail-facts .lead dd { color: var(--accent); }
+.detail-close { position: absolute; top: 10px; right: 12px; z-index: 1; }
+dialog.detail .actions { justify-content: space-between; }
+.button-link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 7px; color: var(--text); text-decoration: none;
+  background: var(--panel-raised);
+}
+.button-link:hover, .button-link:focus-visible { border-color: var(--brass); }
 dialog.detail .actions { margin: 0; padding: 14px 20px; position: sticky; bottom: 0;
   background: var(--panel-raised); border-top: 1px solid var(--line); }
 @media (max-width: 760px) {
@@ -275,7 +285,9 @@ dialog.detail .actions { margin: 0; padding: 14px 20px; position: sticky; bottom
 .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 /* Copies of one card: a row per printing and finish. */
-.copy-rows { margin: 10px 0 4px; display: grid; gap: 6px; }
+.copy-rows { margin: 16px 0 4px; display: grid; gap: 6px; }
+.copy-rows .side-title { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: .06em;
+  text-transform: uppercase; }
 .copy-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); }
 .copy-row .copies { margin: 0; gap: 10px; }
@@ -284,7 +296,7 @@ dialog.detail .actions { margin: 0; padding: 14px 20px; position: sticky; bottom
 .copy-add button { min-height: 38px; padding: 6px 12px; }
 
 /* Every printing Scryfall knows about. */
-.versions { margin: 10px 0 2px; }
+.versions { margin: 16px 0 2px; }
 .version-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px;
   max-height: 320px; overflow-y: auto; }
 .version-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
