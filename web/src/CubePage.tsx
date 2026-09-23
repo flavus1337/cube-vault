@@ -40,7 +40,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
   // The cube is what you own. Missing cards only exist after a whole-set import.
-  const [show, setShow] = useState<'owned' | 'missing' | 'all'>('owned')
+  const [show, setShow] = useState<'owned' | 'missing' | 'extra' | 'all'>('owned')
   const [selected, setSelected] = useState<Card | null>(null)
   const [filterDraft, setFilterDraft] = useState<AdvancedFilters | null>(null)
   const filterOpener = useRef<HTMLButtonElement>(null)
@@ -192,11 +192,35 @@ export default function CubePage({ role }: { role: Role }) {
     return result.sort(sorters[sort])
   }, [cards, sets, copies, tags, text, colors, exactColors, rarities, cardTypes, cmcs, keywordList, setCodes, sort, showExcluded])
 
-  // The grid shows one of the three views, the summary always the whole filter.
-  const list = useMemo(
-    () => matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id))),
-    [matched, show, copies],
-  )
+  /* A cube wants one of each card; everything beyond that can be traded away
+     or put back in the box. */
+  const extraOf = (card: Card) => Math.max(0, (copies.get(card.id) ?? 0) - 1)
+  const extraValue = (card: Card) => {
+    const stacks = [...(prints.get(card.id) ?? [])].sort(
+      (a, b) => (a.price_eur ?? card.price_eur ?? 0) - (b.price_eur ?? card.price_eur ?? 0),
+    )
+    // The copy you keep is the cheapest one; the dearer ones are the surplus.
+    let keep = 1
+    let value = 0
+    for (const stack of stacks) {
+      const spare = Math.max(0, stack.qty - keep)
+      keep = Math.max(0, keep - stack.qty)
+      value += spare * (stack.price_eur ?? card.price_eur ?? 0)
+    }
+    return value
+  }
+
+  // The grid shows one of the views, the summary always the whole filter.
+  const list = useMemo(() => {
+    if (show === 'extra') {
+      return matched
+        .filter((c) => (copies.get(c.id) ?? 0) > 1)
+        .sort((a, b) => extraValue(b) - extraValue(a))
+    }
+    return matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)))
+    // extraValue reads the same maps the memo already depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matched, show, copies, prints])
   const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
   /* Each stack is worth what its own printing and finish cost; only a stack
@@ -297,6 +321,7 @@ export default function CubePage({ role }: { role: Role }) {
         <select id="show" aria-label="Anzeigen" value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
           <option value="owned">Vorhandene Karten</option>
           <option value="missing">Fehlende Karten</option>
+          <option value="extra">Mehrfach vorhanden</option>
           <option value="all">Alle Karten</option>
         </select>
         <button className="link-button" onClick={() => setShowHelp(!showHelp)} aria-expanded={showHelp}>
@@ -329,11 +354,19 @@ export default function CubePage({ role }: { role: Role }) {
           <button
             className="link-button"
             onClick={async () => {
-              await copyToClipboard(wantList(list.map((c) => ({ name: c.name, qty: 1 }))))
-              setNotice(`${list.length} Karten in die Zwischenablage kopiert.`)
+              const rows = list.map((c) => ({
+                name: c.name,
+                qty: show === 'extra' ? extraOf(c) : 1,
+              }))
+              await copyToClipboard(wantList(rows))
+              setNotice(`${rows.length} Karten in die Zwischenablage kopiert.`)
             }}
           >
-            {show === 'missing' ? 'Einkaufsliste kopieren' : 'Liste kopieren'}
+            {show === 'missing'
+              ? 'Einkaufsliste kopieren'
+              : show === 'extra'
+                ? 'Tauschliste kopieren'
+                : 'Liste kopieren'}
           </button>
           {canEdit(role) && (
             <button
@@ -394,15 +427,24 @@ export default function CubePage({ role }: { role: Role }) {
           onDiscard={closeFilters}
         />
       )}
-      <Summary
-        {...figures}
-        highlight={show === 'missing' ? 'missing' : 'owned'}
-        hint={
-          show === 'missing'
-            ? 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt.'
-            : undefined
-        }
-      />
+      {show === 'extra' ? (
+        <Summary
+          cards={list.length}
+          copies={list.reduce((sum, c) => sum + extraOf(c), 0)}
+          value={list.reduce((sum, c) => sum + extraValue(c), 0)}
+          hint="Karten, von denen mehr als eine Kopie im Cube liegt — die teureren davon könnt ihr tauschen."
+        />
+      ) : (
+        <Summary
+          {...figures}
+          highlight={show === 'missing' ? 'missing' : 'owned'}
+          hint={
+            show === 'missing'
+              ? 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt.'
+              : undefined
+          }
+        />
+      )}
 
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
@@ -424,13 +466,11 @@ export default function CubePage({ role }: { role: Role }) {
                 look={`${c.excluded ? 'excluded' : ''} ${count ? '' : 'missing'}`.trim()}
                 meta={`${c.set_code.toUpperCase()} #${c.number} · ${euro(c.price_eur)} · ${RARITY[c.rarity] ?? c.rarity}`}
                 note={
-                  count ? (
-                    `${count}× im Cube`
-                  ) : (
-                    <>
-                      fehlt · {euro(c.price_eur)}
-                    </>
-                  )
+                  show === 'extra' && count > 1
+                    ? `${count}× · ${extraOf(c)} zu viel · ${euro(extraValue(c))}`
+                    : count
+                      ? `${count}× im Cube`
+                      : `fehlt · ${euro(c.price_eur)}`
                 }
                 onClick={() => setSelected(c)}
               >
