@@ -310,6 +310,16 @@ dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
 .version-add button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 
+/* Who touched this card, newest first. */
+.card-history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px;
+  max-height: 220px; overflow-y: auto; font-size: 13px; }
+.card-history li { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 10px;
+  align-items: baseline; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-soft); }
+.card-history .when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.card-history .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-history .what { white-space: nowrap; }
+
 /* What a first visit needs, until it is sent away. */
 .intro-card {
   position: relative; margin: 14px 0 0; padding: 18px 20px;
