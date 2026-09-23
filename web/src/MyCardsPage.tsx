@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import CardDetail, { CopyRows } from './CardDetail'
+import { CardSkeleton } from './Skeleton'
 import { euro, finishLabel, summary } from './format'
 import { usePrivateCards } from './mine'
 import { useNotices } from './notices'
@@ -95,7 +96,7 @@ export default function MyCardsPage() {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : loading ? (
-        <p className="status">Lädt …</p>
+        <CardSkeleton count={8} />
       ) : !list.length ? (
         <p className="status">
           Noch nichts hier. Stelle den Scanner in der App auf „Meine Karten“ und scanne los.

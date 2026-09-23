@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
+import { CardSkeleton } from './Skeleton'
 import { useCube } from './cube'
 import { euro, summary } from './format'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
@@ -417,7 +418,7 @@ export default function CubePage({ role }: { role: Role }) {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : loading ? (
-        <p className="status">Lädt …</p>
+        <CardSkeleton count={12} />
       ) : !list.length ? (
         <p className="status">
           {cubeSets.length ? 'Keine Karten gefunden.' : 'Noch keine Karten. Scanne Karten mit der App.'}

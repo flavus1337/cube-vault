@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import CardDetail from './CardDetail'
+import { CardSkeleton } from './Skeleton'
 import { useCube } from './cube'
 import { euro } from './format'
 import { COLOR_GROUPS, colorGroupOf, isLand as isLandType, RARITIES, RARITY, typeOf, TYPES } from './mtg'
@@ -300,7 +301,8 @@ export default function DecksPage() {
   if (loading)
     return (
       <main className="page">
-        <p className="status">Lädt …</p>
+        <h1 className="cube-title">Decks</h1>
+        <CardSkeleton count={8} />
       </main>
     )
 

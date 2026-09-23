@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { downloadBackup } from './backup'
 import { importSet } from './importSet'
 import { useNotices } from './notices'
+import { RowSkeleton } from './Skeleton'
 import {
   canEdit,
   fetchAll,
@@ -68,7 +69,7 @@ export function HistoryPage() {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : !events ? (
-        <p className="status">Lädt …</p>
+        <RowSkeleton />
       ) : !events.length ? (
         <p className="status">Noch keine Änderungen.</p>
       ) : (
@@ -261,7 +262,7 @@ export function SetsPage({ role }: { role: Role }) {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : !sets ? (
-        <p className="status">Lädt …</p>
+        <RowSkeleton />
       ) : !sets.length ? (
         <p className="status">Noch keine Sets. Scanne die erste Karte mit der App.</p>
       ) : (
@@ -366,7 +367,7 @@ export function PlayersPage({ me }: { me: Profile }) {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : !players ? (
-        <p className="status">Lädt …</p>
+        <RowSkeleton />
       ) : (
         <div className="table-wrap">
           <table>
