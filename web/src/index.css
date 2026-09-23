@@ -260,6 +260,29 @@ dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
 .version-add button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 
+/* A short line at the bottom instead of a blocking alert(). */
+.note {
+  position: fixed; z-index: 5; left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 24px));
+  margin: 0; padding: 10px 10px 10px 16px; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--panel-raised); box-shadow: var(--shadow);
+}
+.note-error { border-color: var(--warn); color: var(--warn); }
+.note button { min-height: 32px; padding: 2px 8px; }
+
+/* Yes or no, and a line of text, instead of confirm() and prompt(). */
+.ask-backdrop {
+  position: fixed; z-index: 6; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: rgb(9 7 6 / .82); backdrop-filter: blur(3px);
+}
+.ask {
+  width: min(420px, 100%); padding: 20px; border: 1px solid var(--line-strong); border-radius: 14px;
+  background: var(--panel); box-shadow: 0 28px 70px rgb(0 0 0 / .56);
+}
+.ask p { margin: 0 0 14px; }
+.ask input { width: 100%; }
+.ask .actions { margin-top: 16px; }
+
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); box-shadow: var(--shadow); }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
