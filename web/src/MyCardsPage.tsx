@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
 import CardDetail, { CopyRows } from './CardDetail'
 import { euro, finishLabel, summary } from './format'
-import { useGrowing } from './useGrowing'
+import { useNotices } from './notices'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
 import { fetchAll, supabase, type PrivateCard } from './supabase'
+import { useGrowing } from './useGrowing'
 import { privateCardFrom, type Version } from './versions'
 
 const key = (c: PrivateCard) => `${c.print_id}-${c.finish}`
@@ -14,6 +15,7 @@ const type = (c: PrivateCard) => c.type_de || c.type_line
 /* Cards a player owns outside the cube. The database only ever returns the
    rows of the player who is logged in. */
 export default function MyCardsPage() {
+  const messages = useNotices()
   const [cards, setCards] = useState<PrivateCard[]>(() => readMine() ?? [])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(!readMine())
@@ -59,7 +61,7 @@ export default function MyCardsPage() {
      puts it next to the ones you scanned. */
   async function addVersion(row: Record<string, unknown>) {
     const { error } = await supabase.rpc('add_private_copy', { card: row })
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return messages.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     load(true)
   }
 
@@ -69,7 +71,7 @@ export default function MyCardsPage() {
         ? { card: { ...card, finish, owner: undefined, qty: undefined, added_at: undefined } }
         : { p_print_id: card.print_id, p_finish: finish }),
     })
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return messages.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     load(true)
   }
 

@@ -5,6 +5,7 @@ import { useCube } from './cube'
 import { euro, summary } from './format'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
+import { useNotices } from './notices'
 import { parseQuery } from './query'
 import { useGrowing } from './useGrowing'
 import { loadTags } from './tags'
@@ -47,6 +48,7 @@ const name = (c: Card) => c.name_de || c.name
 const type = (c: Card) => c.type_de || c.type_line
 
 export default function CubePage({ role }: { role: Role }) {
+  const notices = useNotices()
   // Cards, sets, scanned copies and oracle tags, cached between visits.
   const { cards, sets, copies, prints, tags, loading, error, reloadCopies, patchCard } = useCube()
 
@@ -260,19 +262,19 @@ export default function CubePage({ role }: { role: Role }) {
         ? { p_lang: known.find((c) => c.print_id === id)?.lang ?? 'en', p_price: price ?? null }
         : {}),
     })
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     await reloadCopies()
   }
 
   async function toggleExcluded(card: Card) {
     let reason: string | null = null
     if (!card.excluded) {
-      reason = prompt(`Warum soll „${name(card)}“ aus dem Cube?`)
+      reason = await notices.ask(`Warum soll „${name(card)}“ aus dem Cube?`, 'Ausschließen')
       if (reason === null) return
     }
     const patch = { excluded: !card.excluded, exclude_reason: card.excluded ? null : reason || null }
     const { error } = await supabase.from('cards').update(patch).eq('id', card.id)
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     const updated = { ...card, ...patch }
     patchCard(updated)
     setSelected(updated)

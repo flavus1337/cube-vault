@@ -6,6 +6,7 @@ import { euro } from './format'
 import { COLOR_GROUPS, colorGroupOf, isLand as isLandType, RARITIES, RARITY, typeOf, TYPES } from './mtg'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
+import { useNotices } from './notices'
 import { parseQuery } from './query'
 import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
 
@@ -108,6 +109,7 @@ function drawTen(cards: { row: DeckCard; card: PoolCard }[]) {
 /* Decks are private: only their owner sees them. The cards in them can come
    from the player's own collection or from the shared cube. */
 export default function DecksPage() {
+  const notices = useNotices()
   const cubeData = useCube()
   const [privateCards, setPrivateCards] = useState<PrivateCard[]>(() => readMine() ?? [])
   const [decks, setDecks] = useState<Deck[]>([])
@@ -195,19 +197,19 @@ export default function DecksPage() {
   const shown = pool.slice(0, POOL_LIMIT)
 
   async function newDeck() {
-    const deckName = prompt('Name des Decks?')
+    const deckName = await notices.ask('Name des Decks?', 'Anlegen')
     if (!deckName) return
     const { data, error } = await supabase.from('decks').insert({ name: deckName }).select().single()
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     setDecks((all) => [...all, data as Deck])
     setCurrent((data as Deck).id)
   }
 
   async function removeDeck() {
     const deck = decks.find((d) => d.id === current)
-    if (!deck || !confirm(`„${deck.name}“ löschen?`)) return
+    if (!deck || !(await notices.confirm(`„${deck.name}“ löschen?`))) return
     const { error } = await supabase.from('decks').delete().eq('id', deck.id)
-    if (error) return alert(`Löschen fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Löschen fehlgeschlagen: ${error.message}`, 'error')
     setDeckCards((rows) => rows.filter((row) => row.deck_id !== deck.id))
     setDecks((all) => all.filter((d) => d.id !== deck.id))
     setCurrent('')
@@ -226,7 +228,7 @@ export default function DecksPage() {
         ? await supabase.from('deck_cards').delete().eq('deck_id', current).eq('print_id', key)
         : await supabase.from('deck_cards').upsert({ deck_id: current, print_id: key, qty })
     if (error) {
-      alert(`Speichern fehlgeschlagen: ${error.message}`)
+      notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
       void loadDecks()
     }
   }
@@ -461,7 +463,7 @@ export default function DecksPage() {
                           await addLands(current, wantedLands)
                           await Promise.all([loadPools(), loadDecks()])
                         } catch (e) {
-                          alert(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`)
+                          notices.say(`Länder hinzufügen fehlgeschlagen: ${(e as Error).message}`, 'error')
                         } finally {
                           setBusyLands(false)
                         }

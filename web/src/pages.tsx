@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { downloadBackup } from './backup'
 import { importSet } from './importSet'
+import { useNotices } from './notices'
 import {
   canEdit,
   fetchAll,
@@ -111,6 +112,7 @@ export function HistoryPage() {
 }
 
 export function SetsPage({ role }: { role: Role }) {
+  const notices = useNotices()
   const [saving, setSaving] = useState(false)
   const [sets, setSets] = useState<CubeSet[] | null>(null)
   const [counts, setCounts] = useState<Map<string, number>>(new Map())
@@ -188,13 +190,13 @@ export function SetsPage({ role }: { role: Role }) {
       .from('sets')
       .update({ parent_code: parent || null })
       .eq('code', set.code)
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     load()
   }
 
   async function toggle(set: CubeSet) {
     const { error } = await supabase.from('sets').update({ in_cube: !set.in_cube }).eq('code', set.code)
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     load()
   }
 
@@ -338,6 +340,7 @@ export function SetsPage({ role }: { role: Role }) {
 }
 
 export function PlayersPage({ me }: { me: Profile }) {
+  const notices = useNotices()
   const [players, setPlayers] = useState<Profile[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -353,7 +356,7 @@ export function PlayersPage({ me }: { me: Profile }) {
 
   async function changeRole(player: Profile, role: Role) {
     const { error } = await supabase.from('profiles').update({ role }).eq('id', player.id)
-    if (error) return alert(`Speichern fehlgeschlagen: ${error.message}`)
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
     load()
   }
 
