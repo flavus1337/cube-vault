@@ -23,21 +23,37 @@ async function scryfall(url: string, pause = 500) {
   }
 }
 
-/** EUR price of the English print, keyed by "set/collector number". */
+/** What one printing costs, plain and as a foil. */
+export type PrintPrice = { price_eur: number | null; price_eur_foil: number | null }
+
+const money = (raw: string | null | undefined) => {
+  const value = parseFloat(raw ?? '')
+  return Number.isNaN(value) ? null : value
+}
+
+/* One search per set brings every printing in it, in every language. The cards
+   take the price of the English print, the scanned copies the price of their
+   own print, found by its Scryfall id. */
 export async function pricesOfSets(sets: string[], progress: (text: string) => void) {
-  const prices = new Map<string, { price_eur: number | null; legalities: Record<string, string> | null }>()
+  /** Keyed "set/collector number", English only: what a cube card is worth. */
+  const cards = new Map<string, { price_eur: number | null; legalities: Record<string, string> | null }>()
+  /** Keyed by Scryfall id: what a scanned printing is worth. */
+  const prints = new Map<string, PrintPrice>()
+
   for (const [i, set] of sets.entries()) {
     progress(`Preise laden … Set ${i + 1} von ${sets.length} (${set.toUpperCase()})`)
     let url: string | null =
       `https://api.scryfall.com/cards/search?${new URLSearchParams({
-        q: `e:${set} lang:en game:paper`,
+        q: `e:${set} game:paper`,
         unique: 'prints',
       })}`
     while (url) {
       const page: {
         data: {
+          id: string
+          lang: string
           collector_number: string
-          prices?: { eur?: string | null }
+          prices?: { eur?: string | null; eur_foil?: string | null }
           legalities?: Record<string, string>
         }[]
         has_more: boolean
@@ -45,40 +61,59 @@ export async function pricesOfSets(sets: string[], progress: (text: string) => v
       } | null = await scryfall(url)
       if (!page) break
       for (const card of page.data) {
-        const eur = parseFloat(card.prices?.eur ?? '')
-        prices.set(`${set}/${card.collector_number}`, {
-          // A German print has no price of its own; then the old one stays.
-          price_eur: Number.isNaN(eur) ? null : eur,
-          legalities: card.legalities ?? null,
+        prints.set(card.id, {
+          price_eur: money(card.prices?.eur),
+          price_eur_foil: money(card.prices?.eur_foil),
         })
+        // A German print has no price of its own; then the old one stays.
+        if (card.lang === 'en') {
+          cards.set(`${set}/${card.collector_number}`, {
+            price_eur: money(card.prices?.eur),
+            legalities: card.legalities ?? null,
+          })
+        }
       }
       url = page.has_more && page.next_page ? page.next_page : null
     }
   }
-  return prices
+  return { cards, prints }
 }
 
-/* Copies point at a printing that may sit in another set than the card, e.g.
-   a Comic-Con foil. Those are asked for one by one; there are only a few. */
-async function refreshCopyPrices(progress: (text: string) => void) {
+/* Most copies are printings of the sets the cube holds, so their price came
+   with the set search. Only a printing from somewhere else, e.g. a Comic-Con
+   foil, is asked for on its own. */
+async function refreshCopyPrices(
+  known: Map<string, PrintPrice>,
+  progress: (text: string) => void,
+) {
   const all = await fetchAll<Copy>('copies', 'print_id')
-  /* A normal copy of the card's own printing is already covered by the card
-     price, so only foils and other printings are asked for. */
+  /* A plain copy of the card's own printing is already covered by the card
+     price, so only foils and other printings are looked at. */
   const copies = all.filter((copy) => copy.finish !== 'nonfoil' || copy.print_id !== copy.card_id)
   const rows: { print_id: string; finish: string; price_eur: number | null }[] = []
-  for (const [i, copy] of copies.entries()) {
-    progress(`Preise der Exemplare … ${i + 1} von ${copies.length}`)
+  const strangers = copies.filter((copy) => !known.has(copy.print_id))
+
+  for (const [i, copy] of strangers.entries()) {
+    progress(`Preise fremder Drucke … ${i + 1} von ${strangers.length}`)
     const card: { prices?: { eur?: string | null; eur_foil?: string | null } } | null =
       await scryfall(`https://api.scryfall.com/cards/${copy.print_id}`, 120)
     if (!card) continue
-    const raw = copy.finish === 'nonfoil' ? card.prices?.eur : card.prices?.eur_foil
-    const price = parseFloat(raw ?? '')
+    known.set(copy.print_id, {
+      price_eur: money(card.prices?.eur),
+      price_eur_foil: money(card.prices?.eur_foil),
+    })
+  }
+
+  for (const copy of copies) {
+    const price = known.get(copy.print_id)
+    if (!price) continue
     rows.push({
       print_id: copy.print_id,
       finish: copy.finish,
-      price_eur: Number.isNaN(price) ? null : price,
+      price_eur: copy.finish === 'nonfoil' ? price.price_eur : price.price_eur_foil,
     })
   }
+
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await supabase.rpc('set_copy_prices', { rows: rows.slice(i, i + 500) })
     if (error) throw error
@@ -94,7 +129,7 @@ export async function refreshCubePrices(progress: (text: string) => void) {
   )
   const fresh = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
   const rows = cards
-    .map((c) => ({ id: c.id, ...fresh.get(`${c.set_code}/${c.number}`) }))
+    .map((c) => ({ id: c.id, ...fresh.cards.get(`${c.set_code}/${c.number}`) }))
     .filter((row) => row.price_eur !== undefined || row.legalities !== undefined)
 
   // One update statement per batch: an upsert would fail on the not-null
@@ -104,7 +139,7 @@ export async function refreshCubePrices(progress: (text: string) => void) {
     const { error } = await supabase.rpc('set_card_data', { rows: rows.slice(i, i + 500) })
     if (error) throw error
   }
-  const priced = await refreshCopyPrices(progress)
+  const priced = await refreshCopyPrices(fresh.prints, progress)
   progress(`Fertig: ${rows.length} von ${cards.length} Karten, ${priced} Exemplare aktualisiert.`)
 }
 
@@ -112,11 +147,17 @@ export async function refreshPrivatePrices(progress: (text: string) => void) {
   const cards = await fetchAll<PrivateCard>('private_cards', 'print_id')
   const prices = await pricesOfSets([...new Set(cards.map((c) => c.set_code))], progress)
   const changed = cards
-    .map((c) => ({
-      print_id: c.print_id,
-      price_eur: prices.get(`${c.set_code}/${c.number}`)?.price_eur ?? null,
-      old: c.price_eur,
-    }))
+    .map((c) => {
+      // Your own cards carry a finish, so a foil takes the foil price.
+      const print = prices.prints.get(c.print_id)
+      const plain = prices.cards.get(`${c.set_code}/${c.number}`)?.price_eur ?? null
+      const price = print
+        ? c.finish === 'nonfoil'
+          ? print.price_eur
+          : print.price_eur_foil
+        : plain
+      return { print_id: c.print_id, price_eur: price, old: c.price_eur }
+    })
     .filter((c) => c.price_eur !== null && c.price_eur !== c.old)
     .map((c) => ({ print_id: c.print_id, price_eur: c.price_eur! }))
 
