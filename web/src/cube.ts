@@ -70,7 +70,7 @@ export function useCube() {
     }
 
     /* Other people's scans arrive as events, so only the cards named in the
-       new events are fetched again. A hidden tab asks for nothing. */
+       new events are fetched again. */
     async function catchUp() {
       if (document.hidden) return
       const { data: events } = await supabase
@@ -118,10 +118,17 @@ export function useCube() {
         }
       })
     }
-    const timer = setInterval(catchUp, 15000)
+    /* Other people's scans arrive within a minute, and right away when you
+       come back to the tab. A hidden tab asks for nothing. */
+    const timer = setInterval(catchUp, 60000)
+    const onVisible = () => catchUp()
+    document.addEventListener('visibilitychange', onVisible)
+    addEventListener('focus', onVisible)
     return () => {
       stop = true
       clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      removeEventListener('focus', onVisible)
     }
   }, [])
 
