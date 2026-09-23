@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useCube } from './cube'
 import { usePrivateCards } from './mine'
+import { RowSkeleton } from './Skeleton'
 import { summary } from './format'
 import { COLOR_GROUPS, colorGroupOf, isLand, RARITIES, TYPES } from './mtg'
 import { type Card, type Copy, type PrivateCard } from './supabase'
@@ -145,7 +146,7 @@ export default function StatsPage() {
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
       ) : !stats ? (
-        <p className="status">Lädt …</p>
+        <RowSkeleton count={8} />
       ) : !stats.cards ? (
         <p className="status">Noch keine Karten.</p>
       ) : (

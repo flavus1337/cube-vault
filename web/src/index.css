@@ -260,6 +260,19 @@ dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
 .version-add button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 
+/* Empty shapes while the cards are on their way. */
+.skeleton { position: relative; overflow: hidden; background: var(--panel-soft); border-radius: 10px; }
+.tile.skeleton { aspect-ratio: 488 / 680; border: 1px solid var(--line); }
+.row-skeletons { display: grid; gap: 8px; }
+.row-skeletons .skeleton { height: 46px; }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(184 144 90 / .12), transparent);
+  animation: sweep 1.4s infinite;
+}
+@keyframes sweep { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } }
+
 /* A short line at the bottom instead of a blocking alert(). */
 .note {
   position: fixed; z-index: 5; left: 50%; bottom: 18px; transform: translateX(-50%);
