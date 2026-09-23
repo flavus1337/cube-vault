@@ -60,12 +60,14 @@ dump "$SUPABASE_DB_URL" --data-only --schema=public --no-owner --disable-trigger
 rows=$(grep -c '^INSERT\|^COPY' data.sql || true)
 printf 'Stand: %s\nZeilenblöcke: %s\n' "$(date '+%d.%m.%Y %H:%M')" "$rows" > STATUS.txt
 
-if git diff --quiet; then
+git add -A
+# --porcelain also sees files that are new; git diff alone would call the
+# first run "unchanged" and never commit anything.
+if [ -z "$(git status --porcelain)" ]; then
   echo "$(date '+%F %T') nichts geändert"
   exit 0
 fi
 
-git add -A
 git commit -q -m "Backup $(date '+%d.%m.%Y')"
 git push -q origin HEAD
 echo "$(date '+%F %T') gesichert ($(du -h data.sql | cut -f1))"
