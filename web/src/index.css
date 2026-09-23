@@ -260,6 +260,13 @@ dialog.detail .version-list img { width: 46px; max-height: none; border-radius: 
 .version-add { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
 .version-add button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 
+/* The line that greets a first visit, with the search examples in it. */
+.intro { margin: 10px 2px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.example { min-height: 34px; padding: 3px 10px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+.example code { color: var(--text); }
+.summary .hint { color: var(--muted); }
+.example:hover, .example:focus-visible { color: var(--text); }
+
 /* Empty shapes while the cards are on their way. */
 .skeleton { position: relative; overflow: hidden; background: var(--panel-soft); border-radius: 10px; }
 .tile.skeleton { aspect-ratio: 488 / 680; border: 1px solid var(--line); }
