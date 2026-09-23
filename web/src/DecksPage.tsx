@@ -3,6 +3,7 @@ import { readMine, writeMine } from './cache'
 import CardDetail from './CardDetail'
 import { useCube } from './cube'
 import { euro } from './format'
+import { COLOR_GROUPS, colorGroupOf, isLand as isLandType, RARITIES, RARITY, typeOf, TYPES } from './mtg'
 import { addLands, BASICS, pipsOf, suggestLands } from './lands'
 import { copyToClipboard, wantList } from './prices'
 import { parseQuery } from './query'
@@ -16,33 +17,7 @@ type DeckCard = { deck_id: string; print_id: string; qty: number }
    cube cards. It carries the full card shape so the cube search works on it. */
 type PoolCard = Card & { key: string; owned: number; source: 'mine' | 'cube' }
 
-const GROUPS: [string, string][] = [
-  ['W', 'Weiß'],
-  ['U', 'Blau'],
-  ['B', 'Schwarz'],
-  ['R', 'Rot'],
-  ['G', 'Grün'],
-  ['M', 'Mehrfarbig'],
-  ['C', 'Farblos'],
-  ['L', 'Länder'],
-]
 
-/* How the deck can be split into columns, the way Archidekt does it. */
-const TYPE_ORDER: [string, RegExp][] = [
-  ['Kreaturen', /Kreatur|Creature/i],
-  ['Planeswalker', /Planeswalker/i],
-  ['Spontanzauber', /Spontanzauber|Instant/i],
-  ['Hexereien', /Hexerei|Sorcery/i],
-  ['Länder', /Land/i],
-  ['Artefakte', /Artefakt|Artifact/i],
-  ['Verzauberungen', /Verzauberung|Enchantment/i],
-]
-const RARITY_ORDER: [string, string][] = [
-  ['common', 'Gewöhnlich'],
-  ['uncommon', 'Ungewöhnlich'],
-  ['rare', 'Selten'],
-  ['mythic', 'Mythisch selten'],
-]
 const GROUP_BY: Record<string, string> = {
   type: 'Typ',
   color: 'Farbe',
@@ -57,25 +32,20 @@ const SORT_BY: Record<string, string> = {
 }
 
 const name = (c: PoolCard) => c.name_de || c.name
-const isLand = (c: PoolCard) => /Land/i.test(c.type_de || c.type_line)
+const typeLine = (c: PoolCard) => c.type_de || c.type_line
+const isLand = (c: PoolCard) => isLandType(typeLine(c))
+const groupOf = (c: PoolCard) => colorGroupOf(c.colors, typeLine(c))
 
-function groupOf(card: PoolCard) {
-  if (isLand(card)) return 'L'
-  if (!card.colors) return 'C'
-  return card.colors.length > 1 ? 'M' : card.colors
-}
-
-const typeOf = (card: PoolCard) =>
-  TYPE_ORDER.find(([, words]) => words.test(card.type_de || card.type_line))?.[0] ?? 'Sonstiges'
+const columnOf = (card: PoolCard) => typeOf(typeLine(card), true)
 
 /** The columns of the deck view: a label, the cards in it, and a colour dot. */
 function columnsOf(rows: { row: DeckCard; card: PoolCard }[], by: string) {
   const buckets = new Map<string, { row: DeckCard; card: PoolCard }[]>()
   const key = (card: PoolCard) => {
-    if (by === 'color') return GROUPS.find(([g]) => g === groupOf(card))![1]
+    if (by === 'color') return COLOR_GROUPS.find(([g]) => g === groupOf(card))![1]
     if (by === 'cmc') return card.cmc >= 7 ? '7+ Mana' : `${card.cmc} Mana`
-    if (by === 'rarity') return RARITY_ORDER.find(([r]) => r === card.rarity)?.[1] ?? 'Sonstiges'
-    return typeOf(card)
+    if (by === 'rarity') return RARITY[card.rarity] ?? 'Sonstiges'
+    return columnOf(card)
   }
   for (const entry of rows) {
     const label = key(entry.card)
@@ -83,18 +53,18 @@ function columnsOf(rows: { row: DeckCard; card: PoolCard }[], by: string) {
   }
   const order =
     by === 'color'
-      ? GROUPS.map(([, label]) => label)
+      ? COLOR_GROUPS.map(([, label]) => label)
       : by === 'cmc'
         ? ['0 Mana', '1 Mana', '2 Mana', '3 Mana', '4 Mana', '5 Mana', '6 Mana', '7+ Mana']
         : by === 'rarity'
-          ? RARITY_ORDER.map(([, label]) => label)
-          : [...TYPE_ORDER.map(([label]) => label), 'Sonstiges']
+          ? RARITIES.map(([, label]) => label)
+          : [...TYPES.map(([, plural]) => plural), 'Sonstiges']
   const rest = [...buckets.keys()].filter((label) => !order.includes(label))
   return [...order, ...rest]
     .filter((label) => buckets.has(label))
     .map((label) => ({
       label,
-      dot: by === 'color' ? GROUPS.find(([, l]) => l === label)?.[0] : null,
+      dot: by === 'color' ? COLOR_GROUPS.find(([, l]) => l === label)?.[0] : null,
       rows: buckets.get(label)!,
     }))
 }

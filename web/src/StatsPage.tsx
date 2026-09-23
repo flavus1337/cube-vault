@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { readMine, writeMine } from './cache'
 import { useCube } from './cube'
 import { summary } from './format'
+import { COLOR_GROUPS, colorGroupOf, isLand, RARITIES, TYPES } from './mtg'
 import { fetchAll, type Card, type Copy, type PrivateCard } from './supabase'
 
 // One row per card, no matter which list it came from.
@@ -16,38 +17,8 @@ type Row = {
   value: number
 }
 
-const COLOR_GROUPS: [string, string][] = [
-  ['W', 'Weiß'],
-  ['U', 'Blau'],
-  ['B', 'Schwarz'],
-  ['R', 'Rot'],
-  ['G', 'Grün'],
-  ['M', 'Mehrfarbig'],
-  ['C', 'Farblos'],
-  ['L', 'Land'],
-]
-const TYPE_WORDS: Record<string, RegExp> = {
-  Kreatur: /Kreatur|Creature/i,
-  Spontanzauber: /Spontanzauber|Instant/i,
-  Hexerei: /Hexerei|Sorcery/i,
-  Verzauberung: /Verzauberung|Enchantment/i,
-  Artefakt: /Artefakt|Artifact/i,
-  Planeswalker: /Planeswalker/i,
-  Land: /Land/i,
-}
-const RARITIES: [string, string][] = [
-  ['common', 'Gewöhnlich'],
-  ['uncommon', 'Ungewöhnlich'],
-  ['rare', 'Selten'],
-  ['mythic', 'Mythisch selten'],
-]
 
-// A land counts as land, everything else by its colours.
-function colorGroup(row: Row) {
-  if (TYPE_WORDS.Land.test(row.type)) return 'L'
-  if (!row.colors) return 'C'
-  return row.colors.length > 1 ? 'M' : row.colors
-}
+const colorGroup = (row: Row) => colorGroupOf(row.colors, row.type)
 
 function Bars(props: { title: string; data: [string, number][]; color?: (key: string) => string }) {
   const { title, data, color } = props
@@ -135,8 +106,7 @@ export default function StatsPage() {
     const curve = ['0', '1', '2', '3', '4', '5', '6', '7+'].map((label) => {
       const value = label === '7+' ? 7 : Number(label)
       const hit = rows.filter(
-        (row) =>
-          !TYPE_WORDS.Land.test(row.type) && (label === '7+' ? row.cmc >= 7 : row.cmc === value),
+        (row) => !isLand(row.type) && (label === '7+' ? row.cmc >= 7 : row.cmc === value),
       )
       return [label, weigh(hit)] as [string, number]
     })
@@ -148,8 +118,8 @@ export default function StatsPage() {
         ([key, label]) => [label, weigh(rows.filter((row) => colorGroup(row) === key))] as [string, number],
       ),
       curve,
-      types: Object.keys(TYPE_WORDS).map(
-        (type) => [type, weigh(rows.filter((row) => TYPE_WORDS[type].test(row.type)))] as [string, number],
+      types: TYPES.map(
+        ([label, , words]) => [label, weigh(rows.filter((row) => words.test(row.type)))] as [string, number],
       ),
       rarities: RARITIES.map(
         ([key, label]) => [label, weigh(rows.filter((row) => row.rarity === key))] as [string, number],
