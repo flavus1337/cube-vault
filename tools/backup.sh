@@ -77,19 +77,31 @@ esac
 cd "$repo"
 git pull -q --rebase --autostash 2>/dev/null || true
 
-# Two files, always the same names: git keeps the days and stores only what
-# changed from one to the next. The \restrict line pg_dump writes carries a
-# fresh token every run, which would make every night look like a change; psql
-# reads the dump without it.
+# One folder per day. The \restrict line pg_dump writes carries a fresh token
+# every run, which would make every night look like a change; psql reads the
+# dump without it.
 steady() { grep -v '^\\\(un\)\?restrict ' ; }
 
+today=$(date '+%Y-%m-%d')
+mkdir -p "history/$today"
 dump "$SUPABASE_DB_URL" --schema-only --schema=public --no-owner --no-privileges \
-  | steady > schema.sql
+  | steady > "history/$today/schema.sql"
 dump "$SUPABASE_DB_URL" --data-only --schema=public --no-owner --disable-triggers \
-  --exclude-table-data='storage.*' | steady > data.sql
+  --exclude-table-data='storage.*' | steady > "history/$today/data.sql"
 
-rows=$(grep -c '^INSERT\|^COPY' data.sql || true)
-printf 'Stand: %s\nZeilenblöcke: %s\n' "$(date '+%d.%m.%Y %H:%M')" "$rows" > STATUS.txt
+# Two weeks lie around as files; everything before that stays in the history,
+# where `git log` and `git show` still reach it.
+keep_from=$(date -v-14d '+%Y-%m-%d' 2>/dev/null || date -d '14 days ago' '+%Y-%m-%d')
+for day in history/*/; do
+  name=$(basename "$day")
+  [ "$name" \< "$keep_from" ] && rm -rf "$day"
+done
+
+rows=$(grep -c '^INSERT\|^COPY' "history/$today/data.sql" || true)
+{
+  printf 'Stand: %s\nZeilenblöcke: %s\nAls Dateien: %s Tage ab %s\n' \
+    "$(date '+%d.%m.%Y %H:%M')" "$rows" "$(ls history | wc -l | tr -d ' ')" "$keep_from"
+} > STATUS.txt
 
 git add -A
 # --porcelain also sees files that are new; git diff alone would call the
@@ -101,4 +113,4 @@ fi
 
 git commit -q -m "Backup $(date '+%d.%m.%Y')"
 git push -q origin HEAD
-echo "$(date '+%F %T') gesichert ($(du -h data.sql | cut -f1))"
+echo "$(date '+%F %T') gesichert ($(du -h "history/$today/data.sql" | cut -f1))"
