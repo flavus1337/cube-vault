@@ -73,8 +73,8 @@ release depends on:
 ## Backup
 
 `tools/backup.sh` zieht jede Nacht um 01:00 einen `pg_dump` und legt ihn im
-privaten Repo `cube-vault-backup` ab — `schema.sql`, `data.sql`, dazu die
-Git-Historie als Verlauf der Tage. Eingerichtet wird der Lauf einmal mit:
+privaten Repo `cube-vault-backup` unter `history/<datum>/` ab. Als Dateien
+liegen dort die letzten 14 Tage, alles Ältere bleibt in der Git-Historie. Eingerichtet wird der Lauf einmal mit:
 
 ```sh
 cp tools/de.prigl.cube-vault-backup.plist ~/Library/LaunchAgents/
