@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
+import AdminPage from './AdminPage'
 import CubePage from './CubePage'
 import MyCardsPage from './MyCardsPage'
 import DecksPage from './DecksPage'
@@ -108,7 +109,7 @@ export default function App() {
     ['/stats', 'Auswertung'],
     ['/history', 'Verlauf'],
     ['/sets', 'Sets'],
-    ...(profile.role === 'admin' ? [['/players', 'Spieler']] : []),
+    ...(profile.role === 'admin' ? [['/admin', 'Übersicht'], ['/players', 'Spieler']] : []),
   ]
 
   return (
@@ -143,6 +144,8 @@ export default function App() {
         <HistoryPage />
       ) : route === '/sets' ? (
         <SetsPage role={profile.role} />
+      ) : route === '/admin' && profile.role === 'admin' ? (
+        <AdminPage />
       ) : route === '/players' && profile.role === 'admin' ? (
         <PlayersPage me={profile} />
       ) : (
