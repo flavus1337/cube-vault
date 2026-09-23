@@ -71,6 +71,14 @@ export type Copy = {
   number: string | null
 }
 
+/** A card the group wants to buy. Gone as soon as a copy is scanned. */
+export type Want = {
+  card_id: string
+  added_by: string | null
+  added_at: string
+  note: string | null
+}
+
 export type CardEvent = {
   id: number
   at: string

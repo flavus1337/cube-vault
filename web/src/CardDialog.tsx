@@ -7,6 +7,9 @@ export default function CardDialog(props: {
   copies: number
   prints: Copy[]
   editable: boolean
+  /** On the shared shopping list. */
+  wanted: boolean
+  onToggleWanted: () => void
   onChangeCopies: (
     delta: number,
     printId?: string,
@@ -17,7 +20,8 @@ export default function CardDialog(props: {
   onToggleExcluded: () => void
   onClose: () => void
 }) {
-  const { card, copies, prints, editable, onChangeCopies, onToggleExcluded, onClose } = props
+  const { card, copies, prints, editable, wanted, onToggleWanted, onChangeCopies, onToggleExcluded, onClose } =
+    props
 
   const rows = [...prints]
     .sort((a, b) => a.finish.localeCompare(b.finish) || a.lang.localeCompare(b.lang))
@@ -67,9 +71,16 @@ export default function CardDialog(props: {
           : undefined
       }
       actions={
-        editable ? (
-          <button onClick={onToggleExcluded}>{card.excluded ? 'Wieder aufnehmen' : 'Ausschließen'}</button>
-        ) : null
+        <>
+          <button onClick={onToggleWanted}>
+            {wanted ? 'Von der Einkaufsliste' : 'Auf die Einkaufsliste'}
+          </button>
+          {editable && (
+            <button onClick={onToggleExcluded}>
+              {card.excluded ? 'Wieder aufnehmen' : 'Ausschließen'}
+            </button>
+          )}
+        </>
       }
     >
       {editable && (
