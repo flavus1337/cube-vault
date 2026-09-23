@@ -2,8 +2,22 @@ import { useEffect, useMemo, useState } from 'react'
 import CardDetail from './CardDetail'
 import { CardSkeleton } from './Skeleton'
 import { useCube } from './cube'
+import {
+  columnsOf,
+  drawTen,
+  fromCube,
+  fromPrivate,
+  GROUP_BY,
+  isLand,
+  name,
+  SORT_BY,
+  type Deck,
+  type DeckCard,
+  type PoolCard,
+} from './deck'
+import DeckColumns from './DeckColumns'
 import { euro } from './format'
-import { COLOR_GROUPS, colorGroupOf, isLand as isLandType, RARITIES, RARITY, typeOf, TYPES } from './mtg'
+import OpeningHand from './OpeningHand'
 import { addLands } from './lands'
 import { BASICS, pipsOf, suggestLands } from './mana'
 import { copyToClipboard, wantList } from './prices'
@@ -11,106 +25,8 @@ import { usePrivateCards } from './mine'
 import { useNarrow } from './useNarrow'
 import { useNotices } from './notices'
 import { parseQuery } from './query'
-import { fetchAll, supabase, type Card, type PrivateCard } from './supabase'
+import { fetchAll, supabase } from './supabase'
 
-type Deck = { id: string; name: string; created_at: string }
-type DeckCard = { deck_id: string; print_id: string; qty: number }
-
-/* A card a deck can hold, from the player's own cards or from the cube. `key`
-   is what deck_cards stores: the scanned print for own cards, the card id for
-   cube cards. It carries the full card shape so the cube search works on it. */
-type PoolCard = Card & { key: string; owned: number; source: 'mine' | 'cube' }
-
-
-const GROUP_BY: Record<string, string> = {
-  type: 'Typ',
-  color: 'Farbe',
-  cmc: 'Manabetrag',
-  rarity: 'Seltenheit',
-}
-const SORT_BY: Record<string, string> = {
-  name: 'Name',
-  cmc: 'Manabetrag',
-  price: 'Preis',
-  qty: 'Anzahl',
-}
-
-const name = (c: PoolCard) => c.name_de || c.name
-const typeLine = (c: PoolCard) => c.type_de || c.type_line
-const isLand = (c: PoolCard) => isLandType(typeLine(c))
-const groupOf = (c: PoolCard) => colorGroupOf(c.colors, typeLine(c))
-
-const columnOf = (card: PoolCard) => typeOf(typeLine(card), true)
-
-/** The columns of the deck view: a label, the cards in it, and a colour dot. */
-function columnsOf(rows: { row: DeckCard; card: PoolCard }[], by: string) {
-  const buckets = new Map<string, { row: DeckCard; card: PoolCard }[]>()
-  const key = (card: PoolCard) => {
-    if (by === 'color') return COLOR_GROUPS.find(([g]) => g === groupOf(card))![1]
-    if (by === 'cmc') return card.cmc >= 7 ? '7+ Mana' : `${card.cmc} Mana`
-    if (by === 'rarity') return RARITY[card.rarity] ?? 'Sonstiges'
-    return columnOf(card)
-  }
-  for (const entry of rows) {
-    const label = key(entry.card)
-    buckets.set(label, [...(buckets.get(label) ?? []), entry])
-  }
-  const order =
-    by === 'color'
-      ? COLOR_GROUPS.map(([, label]) => label)
-      : by === 'cmc'
-        ? ['0 Mana', '1 Mana', '2 Mana', '3 Mana', '4 Mana', '5 Mana', '6 Mana', '7+ Mana']
-        : by === 'rarity'
-          ? RARITIES.map(([, label]) => label)
-          : [...TYPES.map(([, plural]) => plural), 'Sonstiges']
-  const rest = [...buckets.keys()].filter((label) => !order.includes(label))
-  return [...order, ...rest]
-    .filter((label) => buckets.has(label))
-    .map((label) => ({
-      label,
-      dot: by === 'color' ? COLOR_GROUPS.find(([, l]) => l === label)?.[0] : null,
-      rows: buckets.get(label)!,
-    }))
-}
-
-function fromPrivate(card: PrivateCard): PoolCard {
-  return {
-    ...card,
-    id: card.print_id,
-    key: card.print_id,
-    owned: card.qty,
-    source: 'mine',
-    // Own cards keep less data than cube cards; the search treats these as empty.
-    oracle_text: '',
-    text_de: null,
-    color_identity: card.colors,
-    keywords: [],
-    legalities: null,
-    layout: null,
-    image_en: card.image,
-    excluded: false,
-    exclude_reason: null,
-    rarity: card.rarity ?? 'common',
-  }
-}
-
-function fromCube(card: Card, copies: number): PoolCard {
-  return { ...card, key: card.id, owned: copies, source: 'cube' }
-}
-
-/* Ten cards from a shuffled deck, so you can see what an opening looks like.
-   Every copy is its own card in the pile. */
-function drawTen(cards: { row: DeckCard; card: PoolCard }[]) {
-  const pile = cards.flatMap(({ row, card }) => Array<PoolCard>(row.qty).fill(card))
-  for (let i = pile.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[pile[i], pile[j]] = [pile[j], pile[i]]
-  }
-  return pile.slice(0, 10)
-}
-
-/* Decks are private: only their owner sees them. The cards in them can come
-   from the player's own collection or from the shared cube. */
 export default function DecksPage() {
   const notices = useNotices()
   const cubeData = useCube()
@@ -347,44 +263,7 @@ export default function DecksPage() {
         )}
       </div>
 
-      {hand && (
-        <section className="hand">
-          <h2>
-            Starthand und drei Züge · {hand.filter(isLand).length} Länder unter {hand.length} Karten
-            <button className="link-button" onClick={() => setHand(null)}>
-              schließen
-            </button>
-          </h2>
-          <h3>Starthand</h3>
-          <div className="hand-cards">
-            {hand.slice(0, 7).map((card, i) => (
-              <figure key={`${card.key}-${i}`}>
-                {card.image ? (
-                  <img src={card.image} alt={name(card)} loading="lazy" />
-                ) : (
-                  <div className="noimg">{name(card)}</div>
-                )}
-                <figcaption>{name(card)}</figcaption>
-              </figure>
-            ))}
-          </div>
-          <h3>Nachgezogen</h3>
-          <div className="hand-cards">
-            {hand.slice(7).map((card, i) => (
-              <figure key={`${card.key}-draw-${i}`}>
-                {card.image ? (
-                  <img src={card.image} alt={name(card)} loading="lazy" />
-                ) : (
-                  <div className="noimg">{name(card)}</div>
-                )}
-                <figcaption>
-                  <strong>Zug {i + 1}</strong> · {name(card)}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-      )}
+      {hand && <OpeningHand cards={hand} onClose={() => setHand(null)} />}
 
       {!current ? (
         <p className="status">Wähle ein Deck oder lege eines an.</p>
@@ -526,39 +405,11 @@ export default function DecksPage() {
             {deckList.length > 0 && !shownInDeck.length && (
               <p className="status">Keine Karte im Deck passt zur Suche.</p>
             )}
-            <div className="deck-columns">
-              {columns.map(({ label, dot, rows }) => (
-                <section key={label} className="deck-column">
-                  <h3>
-                    {dot && <span className={`dot dot-${dot}`} aria-hidden="true" />}
-                    {label} <span className="muted">{rows.reduce((sum, x) => sum + x.row.qty, 0)}</span>
-                  </h3>
-                  <div className="deck-stack">
-                    {rows.map(({ row, card }) => {
-                      const elsewhere = usedElsewhere(card.key)
-                      const short = Math.max(0, row.qty + elsewhere - card.owned)
-                      return (
-                        <button
-                          key={card.key}
-                          className={`stack-card${short ? ' short' : ''}`}
-                          title={`${name(card)} · ${card.cmc} Mana${short ? ` · ${short} fehlen` : ''}`}
-                          aria-label={`${name(card)}, ${row.qty} im Deck`}
-                          onClick={() => setSelectedKey(card.key)}
-                        >
-                          {card.image ? (
-                            <img src={card.image} alt={name(card)} loading="lazy" />
-                          ) : (
-                            <div className="noimg">{name(card)}</div>
-                          )}
-                          <span className="badge">{row.qty}×</span>
-                          {short > 0 && <span className="badge out">{short} fehlen</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
+            <DeckColumns
+              columns={columns}
+              usedElsewhere={usedElsewhere}
+              onPick={setSelectedKey}
+            />
           </section>
 
           <section className={`pool${narrow && !poolOpen ? ' folded' : ''}`}>
