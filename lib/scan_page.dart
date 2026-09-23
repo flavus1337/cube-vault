@@ -581,6 +581,100 @@ class _ScanPageState extends State<ScanPage> {
     image: card['image'] as String?,
   );
 
+  /* Target, finish and printing in one place. They stay as they are until you
+     change them, so a pile of the same kind goes in one card after another. */
+  Future<void> _openSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          void update(VoidCallback change) {
+            setSheet(change);
+            setState(change);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SheetTitle('Wohin', 'Der Cube ist für alle, deine Karten siehst nur du.'),
+                  SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: false,
+                        label: const Text('Cube'),
+                        icon: const Icon(Icons.inventory_2),
+                        enabled: widget.canEdit,
+                      ),
+                      const ButtonSegment(
+                        value: true,
+                        label: Text('Meine Karten'),
+                        icon: Icon(Icons.person),
+                      ),
+                    ],
+                    selected: {_privateMode},
+                    onSelectionChanged: (choice) => update(() {
+                      _privateMode = choice.first;
+                      // The same card may be counted again in the other mode.
+                      _cache.clear();
+                      _countedCardId = null;
+                      _last = null;
+                      _added = 0;
+                    }),
+                  ),
+                  const _SheetTitle(
+                    'Folierung',
+                    'Ob eine Karte glänzt, sieht die Kamera nicht. Foils zählen als eigener Stapel.',
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final option in _finishes)
+                        ChoiceChip(
+                          label: Text(option.$2),
+                          avatar: Icon(option.$3, size: 18),
+                          selected: _finish == option.$1,
+                          onSelected: (_) => update(() => _finish = option.$1),
+                        ),
+                    ],
+                  ),
+                  const _SheetTitle(
+                    'Druck',
+                    'Prerelease- und Promo-Karten tragen denselben Setcode wie die normale Karte, '
+                        'nur der Stempel unterscheidet sie.',
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final option in _variants)
+                        ChoiceChip(
+                          label: Text(option.$2),
+                          selected: _variant == option.$1,
+                          onSelected: (_) => update(() {
+                            _variant = option.$1;
+                            // Prerelease cards are always foil.
+                            if (_variant == 'prerelease') _finish = 'foil';
+                            // The same card is a different print now.
+                            _cache.clear();
+                            _countedCardId = null;
+                            _last = null;
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WakelockPlus.disable();
@@ -610,79 +704,22 @@ class _ScanPageState extends State<ScanPage> {
           ],
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(152),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final option in _finishes)
-                      ChoiceChip(
-                        label: Text(option.$2),
-                        avatar: Icon(option.$3, size: 18),
-                        selected: _finish == option.$1,
-                        onSelected: (_) => setState(() => _finish = option.$1),
-                      ),
-                  ],
-                ),
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: OutlinedButton.icon(
+              onPressed: _openSettings,
+              icon: const Icon(Icons.tune, size: 20),
+              label: Text(
+                '${_privateMode ? 'Meine Karten' : 'Cube'} · '
+                '${_finishes.firstWhere((f) => f.$1 == _finish).$2} · '
+                '${_variants.firstWhere((v) => v.$1 == _variant).$2}',
+                overflow: TextOverflow.ellipsis,
               ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final option in _variants)
-                      ChoiceChip(
-                        label: Text(option.$2),
-                        selected: _variant == option.$1,
-                        onSelected: (_) => setState(() {
-                          _variant = option.$1;
-                          // Prerelease cards are always foil.
-                          if (_variant == 'prerelease') _finish = 'foil';
-                          // The same card is a different print now.
-                          _cache.clear();
-                          _countedCardId = null;
-                          _last = null;
-                        }),
-                      ),
-                  ],
-                ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
               ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  label: Text('Cube'),
-                  icon: Icon(Icons.inventory_2),
-                  enabled: widget.canEdit,
-                ),
-                const ButtonSegment(
-                  value: true,
-                  label: Text('Meine Karten'),
-                  icon: Icon(Icons.person),
-                ),
-              ],
-              selected: {_privateMode},
-              onSelectionChanged: (choice) => setState(() {
-                _privateMode = choice.first;
-                // The same card may be counted again in the other mode.
-                _cache.clear();
-                _countedCardId = null;
-                _last = null;
-                _added = 0;
-              }),
             ),
-          ),
-            ],
           ),
         ),
       ),
@@ -916,4 +953,24 @@ class _ScanPageState extends State<ScanPage> {
             ),
     );
   }
+}
+
+/// A heading in the settings sheet with the line that explains it.
+class _SheetTitle extends StatelessWidget {
+  final String title;
+  final String hint;
+  const _SheetTitle(this.title, this.hint);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 18, bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 2),
+        Text(hint, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+  );
 }
