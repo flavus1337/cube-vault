@@ -70,6 +70,21 @@ release depends on:
   to grow. Android installs no build number below the one on the phone; v0.4.2
   went out as 2016, so a smaller number gives "App nicht installiert".
 
+## Backup
+
+`tools/backup.sh` zieht jede Nacht um 01:00 einen `pg_dump` und legt ihn im
+privaten Repo `cube-vault-backup` ab — `schema.sql`, `data.sql`, dazu die
+Git-Historie als Verlauf der Tage. Eingerichtet wird der Lauf einmal mit:
+
+```sh
+cp tools/de.prigl.cube-vault-backup.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/de.prigl.cube-vault-backup.plist
+```
+
+Die Verbindungszeichenfolge steht in `~/.config/cube-vault/backup.env`
+(`chmod 600`), nie im Repo. Wie man einen Stand zurückspielt, steht im
+Backup-Repo.
+
 ## Supabase
 
 `lib/config.dart` and `web/src/supabase.ts` hold the project URL and the
