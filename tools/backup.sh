@@ -25,13 +25,39 @@ if [ ! -d "$repo/.git" ]; then
   exit 1
 fi
 
-# Supabase runs Postgres 17; a newer pg_dump refuses to talk to it, so the
-# container brings the matching one when the local client is too new.
+# launchd starts with a bare PATH, so the client is looked for where Homebrew
+# keeps it. Supabase runs Postgres 17 and a newer pg_dump refuses to talk to
+# it; then the container brings the matching one.
+find_pg_dump() {
+  local candidate
+  for candidate in \
+    "${PG_DUMP:-}" \
+    /opt/homebrew/opt/postgresql@17/bin/pg_dump \
+    /opt/homebrew/opt/libpq/bin/pg_dump \
+    /usr/local/opt/postgresql@17/bin/pg_dump \
+    /usr/local/opt/libpq/bin/pg_dump \
+    "$(command -v pg_dump 2>/dev/null || true)"
+  do
+    [ -x "$candidate" ] || continue
+    if "$candidate" --version | grep -qE ' 1[0-7]\.'; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+pg_dump_bin=$(find_pg_dump || true)
+
 dump() {
-  if pg_dump --version | grep -qE ' 1[0-7]\.'; then
-    pg_dump "$@"
-  else
+  if [ -n "$pg_dump_bin" ]; then
+    "$pg_dump_bin" "$@"
+  elif docker info >/dev/null 2>&1; then
     docker run --rm -i postgres:17-alpine pg_dump "$@"
+  else
+    echo "Kein pg_dump für Postgres 17 gefunden und Docker läuft nicht." >&2
+    echo "Entweder Docker starten oder: brew install postgresql@17" >&2
+    exit 1
   fi
 }
 
@@ -52,10 +78,15 @@ cd "$repo"
 git pull -q --rebase --autostash 2>/dev/null || true
 
 # Two files, always the same names: git keeps the days and stores only what
-# changed from one to the next.
-dump "$SUPABASE_DB_URL" --schema-only --schema=public --no-owner --no-privileges > schema.sql
+# changed from one to the next. The \restrict line pg_dump writes carries a
+# fresh token every run, which would make every night look like a change; psql
+# reads the dump without it.
+steady() { grep -v '^\\\(un\)\?restrict ' ; }
+
+dump "$SUPABASE_DB_URL" --schema-only --schema=public --no-owner --no-privileges \
+  | steady > schema.sql
 dump "$SUPABASE_DB_URL" --data-only --schema=public --no-owner --disable-triggers \
-  --exclude-table-data='storage.*' > data.sql
+  --exclude-table-data='storage.*' | steady > data.sql
 
 rows=$(grep -c '^INSERT\|^COPY' data.sql || true)
 printf 'Stand: %s\nZeilenblöcke: %s\n' "$(date '+%d.%m.%Y %H:%M')" "$rows" > STATUS.txt
