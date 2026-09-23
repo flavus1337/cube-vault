@@ -11,7 +11,7 @@ import { APK_URL } from './links'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
-import { withinBudget } from './price'
+import { byPrice, withinBudget } from './price'
 import { parseQuery } from './query'
 import { CardSkeleton } from './Skeleton'
 import Summary from './Summary'
@@ -222,9 +222,7 @@ export default function CubePage({ role }: { role: Role }) {
         .sort((a, b) => extraValue(b) - extraValue(a))
     }
     if (show === 'missing') {
-      const gap = matched
-        .filter((c) => !copies.get(c.id))
-        .sort((a, b) => (a.price_eur ?? 0) - (b.price_eur ?? 0))
+      const gap = matched.filter((c) => !copies.get(c.id)).sort(byPrice)
       return withinBudget(gap, Number(budget.replace(',', '.')))
     }
     return matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)))
@@ -467,7 +465,11 @@ export default function CubePage({ role }: { role: Role }) {
               ? budget
                 ? `Die günstigsten ${list.length} fehlenden Karten für zusammen ${euro(
                     list.reduce((sum, c) => sum + (c.price_eur ?? 0), 0),
-                  )}.`
+                  )}.${
+                    missing.filter((c) => c.price_eur == null).length
+                      ? ` ${missing.filter((c) => c.price_eur == null).length} weitere haben keinen Preis und stehen nicht drin.`
+                      : ''
+                  }`
                 : 'Fehlend sind Karten aus geladenen Sets, von denen ihr keine Kopie habt. Setz ein Budget, um die günstigsten zu sehen.'
               : undefined
           }
