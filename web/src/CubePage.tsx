@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from './cache'
 import CardDialog from './CardDialog'
 import CardTile from './CardTile'
@@ -15,7 +15,7 @@ import { byPrice, withinBudget } from './price'
 import { parseQuery } from './query'
 import { CardSkeleton } from './Skeleton'
 import Summary from './Summary'
-import { canEdit, supabase, type Card, type Role } from './supabase'
+import { canEdit, fetchAll, supabase, type Card, type Role, type Want } from './supabase'
 import { loadTags } from './tags'
 import { useGrowing } from './useGrowing'
 
@@ -41,7 +41,7 @@ export default function CubePage({ role }: { role: Role }) {
   const [sort, setSort] = useState('name')
   const [showExcluded, setShowExcluded] = useState(false)
   // The cube is what you own. Missing cards only exist after a whole-set import.
-  const [show, setShow] = useState<'owned' | 'missing' | 'extra' | 'all'>('owned')
+  const [show, setShow] = useState<'owned' | 'missing' | 'extra' | 'wanted' | 'all'>('owned')
   const [selected, setSelected] = useState<Card | null>(null)
   const [filterDraft, setFilterDraft] = useState<AdvancedFilters | null>(null)
   const filterOpener = useRef<HTMLButtonElement>(null)
@@ -49,6 +49,27 @@ export default function CubePage({ role }: { role: Role }) {
   /* Cheapest first, until the money is gone: 838 missing cards are a list
      nobody can act on, "what do I get for 20 €" is one. */
   const [budget, setBudget] = useState('')
+  /* The shopping list: shared, and a scanned copy takes a card off it. */
+  const [wants, setWants] = useState<Map<string, Want>>(new Map())
+
+  const loadWants = useCallback(async () => {
+    const rows = await fetchAll<Want>('wants', 'added_at')
+    setWants(new Map(rows.map((row) => [row.card_id, row])))
+  }, [])
+
+  useEffect(() => {
+    loadWants().catch(() => setWants(new Map()))
+  }, [loadWants])
+
+  async function toggleWant(card: Card) {
+    const on = wants.has(card.id)
+    const { error } = on
+      ? await supabase.from('wants').delete().eq('card_id', card.id)
+      : await supabase.from('wants').insert({ card_id: card.id })
+    if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
+    notices.say(on ? `${name(card)} von der Einkaufsliste genommen.` : `${name(card)} auf die Einkaufsliste gesetzt.`)
+    await loadWants()
+  }
 
   // Keywords that actually appear on the cards in the database.
   const keywords = useMemo(
@@ -221,6 +242,9 @@ export default function CubePage({ role }: { role: Role }) {
         .filter((c) => (copies.get(c.id) ?? 0) > 1)
         .sort((a, b) => extraValue(b) - extraValue(a))
     }
+    if (show === 'wanted') {
+      return matched.filter((c) => wants.has(c.id)).sort(byPrice)
+    }
     if (show === 'missing') {
       const gap = matched.filter((c) => !copies.get(c.id)).sort(byPrice)
       return withinBudget(gap, Number(budget.replace(',', '.')))
@@ -228,7 +252,7 @@ export default function CubePage({ role }: { role: Role }) {
     return matched.filter((c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)))
     // extraValue reads the same maps the memo already depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matched, show, copies, prints, budget])
+  }, [matched, show, copies, prints, budget, wants])
   const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
   /* Each stack is worth what its own printing and finish cost; only a stack
@@ -330,6 +354,7 @@ export default function CubePage({ role }: { role: Role }) {
           <option value="owned">Vorhandene Karten</option>
           <option value="missing">Fehlende Karten</option>
           <option value="extra">Mehrfach vorhanden</option>
+          <option value="wanted">Einkaufsliste{wants.size ? ` · ${wants.size}` : ''}</option>
           <option value="all">Alle Karten</option>
         </select>
         {show === 'missing' && (
@@ -384,12 +409,27 @@ export default function CubePage({ role }: { role: Role }) {
               setNotice(`${rows.length} Karten in die Zwischenablage kopiert.`)
             }}
           >
-            {show === 'missing'
+            {show === 'missing' || show === 'wanted'
               ? 'Einkaufsliste kopieren'
               : show === 'extra'
                 ? 'Tauschliste kopieren'
                 : 'Liste kopieren'}
           </button>
+          {show === 'missing' && list.length > 0 && (
+            <button
+              className="link-button"
+              onClick={async () => {
+                const rows = list.filter((c) => !wants.has(c.id)).map((c) => ({ card_id: c.id }))
+                if (!rows.length) return notices.say('Alle stehen schon auf der Liste.')
+                const { error } = await supabase.from('wants').insert(rows)
+                if (error) return notices.say(`Speichern fehlgeschlagen: ${error.message}`, 'error')
+                await loadWants()
+                notices.say(`${rows.length} Karten auf die Einkaufsliste gesetzt.`)
+              }}
+            >
+              Diese {list.length} auf die Einkaufsliste
+            </button>
+          )}
           {canEdit(role) && (
             <button
               className="link-button"
@@ -449,7 +489,14 @@ export default function CubePage({ role }: { role: Role }) {
           onDiscard={closeFilters}
         />
       )}
-      {show === 'extra' ? (
+      {show === 'wanted' ? (
+        <Summary
+          cards={list.length}
+          copies={list.length}
+          value={list.reduce((sum, c) => sum + (c.price_eur ?? 0), 0)}
+          hint="Karten, die jemand kaufen will. Sobald eine gescannt wird, verschwindet sie von hier."
+        />
+      ) : show === 'extra' ? (
         <Summary
           cards={list.length}
           copies={list.reduce((sum, c) => sum + extraOf(c), 0)}
@@ -496,7 +543,9 @@ export default function CubePage({ role }: { role: Role }) {
                 look={`${c.excluded ? 'excluded' : ''} ${count ? '' : 'missing'}`.trim()}
                 meta={`${c.set_code.toUpperCase()} #${c.number} · ${euro(c.price_eur)} · ${RARITY[c.rarity] ?? c.rarity}`}
                 note={
-                  show === 'extra' && count > 1
+                  show === 'wanted'
+                    ? `gesucht · ${euro(c.price_eur)}`
+                    : show === 'extra' && count > 1
                     ? `${count}× · ${extraOf(c)} zu viel · ${euro(extraValue(c))}`
                     : count
                       ? `${count}× im Cube`
@@ -527,6 +576,8 @@ export default function CubePage({ role }: { role: Role }) {
             changeCopies(selected, delta, printId, finish, price, printing)
           }
           onToggleExcluded={() => toggleExcluded(selected)}
+          wanted={wants.has(selected.id)}
+          onToggleWanted={() => toggleWant(selected)}
           onClose={() => setSelected(null)}
         />
       )}
