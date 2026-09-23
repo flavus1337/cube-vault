@@ -1,0 +1,15 @@
+{
+  "name": "Cube Vault",
+  "short_name": "Cube Vault",
+  "description": "Der Cube und eure Karten",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15120f",
+  "theme_color": "#15120f",
+  "lang": "de",
+  "icons": [
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

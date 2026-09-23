@@ -11,6 +11,15 @@ import { supabase, type Profile } from './supabase'
 
 const logout = () => supabase.auth.signOut()
 
+/** The tab says where you are, and a new page starts at the top. */
+function usePageTitle(route: string, nav: string[][]) {
+  useEffect(() => {
+    const label = nav.find(([path]) => path === route)?.[1]
+    document.title = label ? `${label} · Cube Vault` : 'Cube Vault'
+    scrollTo({ top: 0 })
+  }, [route, nav])
+}
+
 function useHashRoute() {
   const read = () => location.hash.slice(1) || '/cube'
   const [route, setRoute] = useState(read)
@@ -102,7 +111,7 @@ export default function App() {
     )
   }
 
-  const nav = [
+  const nav: string[][] = [
     ['/cube', 'Cube'],
     ['/mine', 'Meine Karten'],
     ['/decks', 'Decks'],
@@ -111,6 +120,8 @@ export default function App() {
     ['/sets', 'Sets'],
     ...(profile.role === 'admin' ? [['/admin', 'Übersicht'], ['/players', 'Spieler']] : []),
   ]
+
+  usePageTitle(route, nav)
 
   return (
     <>
