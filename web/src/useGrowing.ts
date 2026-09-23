@@ -4,11 +4,13 @@ import { useCallback, useRef, useState } from 'react'
    first cards and grows the list as the end of the grid comes into view. */
 export function useGrowing<T>(list: T[], step = 120) {
   const [shown, setShown] = useState(step)
-  const [seen, setSeen] = useState(list)
+  const [seen, setSeen] = useState(list.length)
 
-  // A new filter means a new list: start at the top again.
-  if (seen !== list) {
-    setSeen(list)
+  /* A new filter means a new list: start at the top again. The length says
+     that, not the array itself: a page that builds its list on every render
+     would hand over a new array every time and never stop re-rendering. */
+  if (seen !== list.length) {
+    setSeen(list.length)
     setShown(step)
   }
 
