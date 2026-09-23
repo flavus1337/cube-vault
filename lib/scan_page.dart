@@ -9,35 +9,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'app_theme.dart';
 import 'card_parser.dart';
 import 'db.dart';
+import 'scan_lookup.dart';
+import 'scan_settings.dart';
 import 'main.dart' show displayName, largeImage, printLabel;
-import 'scryfall.dart';
-
-/// Lookup result for one read. [card] is the cube card; [problem] explains
-/// why a print can't be counted (e.g. its set is not in the cube).
-typedef _Found = ({
-  String printId,
-  String lang,
-  Map<String, Object?>? card,
-  String? problem,
-  // The user picked this card in the dialog, so the read name must not
-  // be checked again: a name that did not match is why we asked.
-  bool confirmed,
-});
-
-/// Finish of a scanned copy: value, label and the icon on the chip.
-const _finishes = <(String, String, IconData)>[
-  ('nonfoil', 'Normal', Icons.crop_portrait),
-  ('foil', 'Foil', Icons.auto_awesome),
-  ('etched', 'Etched', Icons.brush),
-];
-
-/// Printing of a scanned card. Scryfall keeps the stamped ones in the promo
-/// set of the same block, e.g. FDN 134 next to PFDN 134s.
-const _variants = <(String, String)>[
-  ('normal', 'Standard'),
-  ('prerelease', 'Prerelease'),
-  ('promo', 'Promo'),
-];
 
 class ScanPage extends StatefulWidget {
   /// Only editors and admins may scan into the cube. Everyone else collects
@@ -63,21 +37,28 @@ class _ScanPageState extends State<ScanPage> {
   DateTime _lastHitAt = DateTime(0);
   DateTime _lastLogAt = DateTime(0);
   // Lookup results per hit key. null = Scryfall does not know it, so we don't ask again.
-  final _cache = <String, _Found?>{};
-  // Set codes the user said no to in this scan session.
-  final _declinedSets = <String>{};
-  Set<String> _knownSets = const {};
-  // Off: every scan goes into the cube. On: into the player's own cards.
-  late bool _privateMode = !widget.canEdit;
-  /* Foil, etched foil or plain. Stays set until you change it, so a pile of
-     foils goes in one after the other. Each finish is counted on its own. */
-  String _finish = 'nonfoil';
-  /* Prerelease and promo pack cards print the same set code and number as the
-     normal card; only the stamp on the picture differs, which the camera
-     cannot tell apart. You pick the printing here. */
-  String _variant = 'normal';
+  final _cache = <String, Found?>{};
+  late final _lookup = CardLookup(
+    askWhichCard: _askWhichCard,
+    askNewSet: _askNewSet,
+    onSetLoading: (setName) => _showFlash(
+      'Lade $setName …',
+      VaultColors.info,
+      Icons.downloading,
+      subtitle: 'alle Karten des Sets',
+      duration: const Duration(minutes: 1), // replaced by the next flash
+    ),
+  );
+  /* Where a scan goes, how the card is finished and which printing it is.
+     Stays as it is until you change it, so a pile of the same kind goes in one
+     card after another. */
+  late ScanSettings _settings = (
+    privateMode: !widget.canEdit,
+    finish: 'nonfoil',
+    variant: 'normal',
+  );
 
-  _Found? _last;
+  Found? _last;
   // The card just counted. It counts again only after the camera saw nothing
   // for a few frames, which means the card was taken out of the picture.
   String? _countedCardId;
@@ -120,7 +101,7 @@ class _ScanPageState extends State<ScanPage> {
     WakelockPlus.enable(); // the screen must not switch off while scanning
     _start();
     Db.setCodes()
-        .then((codes) => _knownSets = codes)
+        .then((codes) => _lookup.knownSets = codes)
         .catchError((_) => const <String>{});
   }
 
@@ -170,7 +151,7 @@ class _ScanPageState extends State<ScanPage> {
           for (final l in b.lines) OcrLine(l.text, l.boundingBox),
       ];
       _ocrMs = ocrWatch.elapsedMilliseconds;
-      final hit = parseCard(lines, knownSets: _knownSets);
+      final hit = parseCard(lines, knownSets: _lookup.knownSets);
       // Diagnosis: when nothing is readable, log what the camera saw.
       if (hit == null &&
           DateTime.now().difference(_lastLogAt) > const Duration(seconds: 2)) {
@@ -240,7 +221,11 @@ class _ScanPageState extends State<ScanPage> {
     final watch = Stopwatch()..start();
     if (!_cache.containsKey(hit.key)) {
       try {
-        _cache[hit.key] = await _lookup(hit);
+        _cache[hit.key] = await _lookup.find(
+          hit,
+          private: _settings.privateMode,
+          variant: _settings.variant,
+        );
       } catch (e) {
         debugPrint('lookup ${hit.key} failed: $e');
         if (mounted) {
@@ -287,7 +272,7 @@ class _ScanPageState extends State<ScanPage> {
     // almost never belongs to a card with the same name.
     if (!found.confirmed &&
         (needsName || count < 2) &&
-        !_nameMatches(hit.name!, card)) {
+        !_lookup.nameMatches(hit.name!, card)) {
       debugPrint(
         'name "${hit.name}" != "${card['name_de'] ?? card['name']}", waiting for a second read',
       );
@@ -297,13 +282,13 @@ class _ScanPageState extends State<ScanPage> {
 
     final int qty;
     try {
-      qty = _privateMode
-          ? await Db.addPrivateCopy({...card, 'finish': _finish})
+      qty = _settings.privateMode
+          ? await Db.addPrivateCopy({...card, 'finish': _settings.finish})
           : await Db.addCopy(
               found.printId,
               card['id'] as String,
               found.lang,
-              _finish,
+              _settings.finish,
             );
     } catch (e) {
       debugPrint('save ${hit.key} failed: $e');
@@ -329,179 +314,6 @@ class _ScanPageState extends State<ScanPage> {
       _added++;
     });
     _showAdded(card, qty);
-  }
-
-  bool _nameMatches(String read, Map<String, Object?> card) {
-    final a = plainName(read);
-    if (a.length < 4) return false;
-    for (final name in [card['name_de'], card['name']]) {
-      final b = plainName('${name ?? ''}');
-      if (b.isEmpty) continue;
-      if (b.contains(a) || a.contains(b)) return true;
-      final prefix = [a.length, b.length, 6].reduce((x, y) => x < y ? x : y);
-      if (a.substring(0, prefix) == b.substring(0, prefix)) return true;
-    }
-    return false;
-  }
-
-  /// Scryfall knows the print; the cube knows which card it counts for. A card
-  /// scanned for the first time is created here, a new set only after asking.
-  Future<_Found?> _lookup(CardHit hit) async {
-    if (_privateMode) return _lookupPrivate(hit);
-    var confirmed = false;
-    // The print that is counted, and the print the cube card is built from.
-    // For a prerelease card those differ: PFDN 134s belongs to FDN 134.
-    Map<String, dynamic>? json;
-    Map<String, dynamic>? base;
-    if (hit.set != null) {
-      json = await fetchBySetNumber(
-        hit.set!,
-        hit.number,
-        hit.lang,
-        variant: _variant,
-      );
-      base = json == null || json['set'] == hit.set!.toLowerCase()
-          ? json
-          : await fetchBySetNumber(hit.set!, hit.number, hit.lang) ?? json;
-    } else {
-      final found = await _findInCubeSets(hit);
-      json = found?.json;
-      base = json;
-      confirmed = found?.confirmed ?? false;
-    }
-    if (json == null || base == null) return null;
-    final printId = json['id'] as String;
-    final lang = json['lang'] as String;
-    final setCode = base['set'] as String;
-    final oracleId = oracleIdOf(base);
-    if (oracleId == null) {
-      return (
-        printId: printId,
-        lang: lang,
-        card: null,
-        problem: 'Karte ohne Oracle-ID',
-        confirmed: confirmed,
-      );
-    }
-
-    var card = await Db.findCard(setCode, oracleId);
-    if (card == null) {
-      if (await Db.findSet(setCode) == null) {
-        if (_declinedSets.contains(setCode)) {
-          return (
-            printId: printId,
-            lang: lang,
-            card: null,
-            problem: '${base['set_name']} ist nicht im Cube',
-            confirmed: confirmed,
-          );
-        }
-        final set = await fetchSet(setCode);
-        if (set == null) return null;
-        // A bonus sheet or commander deck of a set in the cube joins silently.
-        final parent = set['parent_set_code'] as String?;
-        var parentCode = parent != null && await Db.findSet(parent) != null
-            ? parent
-            : null;
-        if (parentCode == null) {
-          final answer = await _askNewSet('${base['set_name']}');
-          if (answer == null) {
-            _declinedSets.add(setCode);
-            return (
-              printId: printId,
-              lang: lang,
-              card: null,
-              problem: '${base['set_name']} ist nicht im Cube',
-              confirmed: confirmed,
-            );
-          }
-          parentCode = answer.isEmpty ? null : answer;
-        }
-        // The whole set comes in with 0 copies, so the cube can show what is missing.
-        if (mounted) {
-          _showFlash(
-            'Lade ${set['name']} …',
-            VaultColors.info,
-            Icons.downloading,
-            subtitle: 'alle Karten des Sets',
-            duration: const Duration(minutes: 1), // replaced by the next flash
-          );
-        }
-        await Db.addSet(set, parentCode: parentCode);
-        await Db.addCards(await fetchSetRows(setCode));
-        card = await Db.findCard(setCode, oracleId);
-      }
-      // A set added before whole-set loading can still miss this card.
-      card ??= await Db.addCard(await fetchCardRow(base));
-    }
-
-    final set = card?['sets'] as Map?;
-    final problem = card == null
-        ? 'Karte konnte nicht angelegt werden'
-        : set?['in_cube'] != true
-        ? '${set?['name']} ist nicht mehr im Cube'
-        : card['excluded'] == true
-        ? 'Karte ist ausgeschlossen'
-        : null;
-    return (
-      printId: printId,
-      lang: lang,
-      card: card,
-      problem: problem,
-      confirmed: confirmed,
-    );
-  }
-
-  /// Own cards can come from any set, so only Scryfall is asked. Without a set
-  /// code on the card the name decides, across all sets.
-  Future<_Found?> _lookupPrivate(CardHit hit) async {
-    final json = hit.set != null
-        ? await fetchBySetNumber(hit.set!, hit.number, hit.lang, variant: _variant)
-        : hit.name == null
-        ? null
-        : await fetchByPrintedName(hit.name!);
-    if (json == null) return null;
-    final row = privateRow(json);
-    return (
-      printId: json['id'] as String,
-      lang: json['lang'] as String,
-      // The oracle id groups prints of the same card while scanning.
-      card: {...row, 'id': row['oracle_id']},
-      problem: null,
-      confirmed: false,
-    );
-  }
-
-  /// Retro frame cards print no set code. The number is tried in every set of
-  /// the cube and only the card whose name matches the read name is taken.
-  Future<({Map<String, dynamic> json, bool confirmed})?> _findInCubeSets(
-    CardHit hit,
-  ) async {
-    final name = hit.name;
-    bool matches(Map<String, dynamic> json) =>
-        name != null &&
-        _nameMatches(name, {
-          'name': json['name'],
-          'name_de': json['printed_name'],
-        });
-
-    final candidates = <Map<String, dynamic>>[];
-    for (final set in _knownSets) {
-      final json = await fetchBySetNumber(set, hit.number, hit.lang);
-      if (json == null) continue;
-      if (matches(json)) return (json: json, confirmed: false);
-      candidates.add(json);
-    }
-    // The tiny number is easy to misread, so the name alone can find the card.
-    if (name != null) {
-      for (final json in await searchInSets(name, _knownSets)) {
-        if (matches(json)) return (json: json, confirmed: false);
-      }
-    }
-    // Name unreadable or different: let the user pick instead of failing.
-    if (candidates.isEmpty) return null;
-    final picked = await _askWhichCard(candidates);
-    return picked == null ? null : (json: picked, confirmed: true);
   }
 
   Future<Map<String, dynamic>?> _askWhichCard(
@@ -575,105 +387,27 @@ class _ScanPageState extends State<ScanPage> {
     displayName(card),
     VaultColors.success,
     Icons.check_circle,
-    subtitle: _privateMode
+    subtitle: _settings.privateMode
         ? '${printLabel(card)} · jetzt $qty× in Meine Karten'
         : '${printLabel(card)} · jetzt $qty× gescannt',
     image: card['image'] as String?,
   );
 
-  /* Target, finish and printing in one place. They stay as they are until you
-     change them, so a pile of the same kind goes in one card after another. */
-  Future<void> _openSettings() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          void update(VoidCallback change) {
-            setSheet(change);
-            setState(change);
-          }
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SheetTitle('Wohin', 'Der Cube ist für alle, deine Karten siehst nur du.'),
-                  SegmentedButton<bool>(
-                    segments: [
-                      ButtonSegment(
-                        value: false,
-                        label: const Text('Cube'),
-                        icon: const Icon(Icons.inventory_2),
-                        enabled: widget.canEdit,
-                      ),
-                      const ButtonSegment(
-                        value: true,
-                        label: Text('Meine Karten'),
-                        icon: Icon(Icons.person),
-                      ),
-                    ],
-                    selected: {_privateMode},
-                    onSelectionChanged: (choice) => update(() {
-                      _privateMode = choice.first;
-                      // The same card may be counted again in the other mode.
-                      _cache.clear();
-                      _countedCardId = null;
-                      _last = null;
-                      _added = 0;
-                    }),
-                  ),
-                  const _SheetTitle(
-                    'Folierung',
-                    'Ob eine Karte glänzt, sieht die Kamera nicht. Foils zählen als eigener Stapel.',
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final option in _finishes)
-                        ChoiceChip(
-                          label: Text(option.$2),
-                          avatar: Icon(option.$3, size: 18),
-                          selected: _finish == option.$1,
-                          onSelected: (_) => update(() => _finish = option.$1),
-                        ),
-                    ],
-                  ),
-                  const _SheetTitle(
-                    'Druck',
-                    'Prerelease- und Promo-Karten tragen denselben Setcode wie die normale Karte, '
-                        'nur der Stempel unterscheidet sie.',
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final option in _variants)
-                        ChoiceChip(
-                          label: Text(option.$2),
-                          selected: _variant == option.$1,
-                          onSelected: (_) => update(() {
-                            _variant = option.$1;
-                            // Prerelease cards are always foil.
-                            if (_variant == 'prerelease') _finish = 'foil';
-                            // The same card is a different print now.
-                            _cache.clear();
-                            _countedCardId = null;
-                            _last = null;
-                          }),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+  /* A different target or printing makes the same card a different scan, so
+     what was read before must not count again. */
+  Future<void> _openSettings() => showScanSettings(
+    context,
+    canEdit: widget.canEdit,
+    settings: _settings,
+    onChange: (next) => setState(() {
+      final target = next.privateMode != _settings.privateMode;
+      _settings = next;
+      _cache.clear();
+      _countedCardId = null;
+      _last = null;
+      if (target) _added = 0;
+    }),
+  );
 
   @override
   void dispose() {
@@ -711,9 +445,7 @@ class _ScanPageState extends State<ScanPage> {
               onPressed: _openSettings,
               icon: const Icon(Icons.tune, size: 20),
               label: Text(
-                '${_privateMode ? 'Meine Karten' : 'Cube'} · '
-                '${_finishes.firstWhere((f) => f.$1 == _finish).$2} · '
-                '${_variants.firstWhere((v) => v.$1 == _variant).$2}',
+                settingsLine(_settings),
                 overflow: TextOverflow.ellipsis,
               ),
               style: OutlinedButton.styleFrom(
@@ -898,16 +630,16 @@ class _ScanPageState extends State<ScanPage> {
                                   tooltip: 'Rückgängig',
                                   icon: const Icon(Icons.undo),
                                   onPressed: () async {
-                                    if (_privateMode) {
+                                    if (_settings.privateMode) {
                                       await Db.removePrivateCopy(
                                         last.printId,
-                                        _finish,
+                                        _settings.finish,
                                       );
                                     } else {
                                       await Db.removeCopy(
                                         last.printId,
                                         lastCard['id'] as String,
-                                        _finish,
+                                        _settings.finish,
                                       );
                                     }
                                     setState(() {
@@ -927,16 +659,16 @@ class _ScanPageState extends State<ScanPage> {
                                   tooltip: 'Noch eine',
                                   icon: const Icon(Icons.add),
                                   onPressed: () async {
-                                    final qty = _privateMode
+                                    final qty = _settings.privateMode
                                         ? await Db.addPrivateCopy({
                                             ...lastCard,
-                                            'finish': _finish,
+                                            'finish': _settings.finish,
                                           })
                                         : await Db.addCopy(
                                             last.printId,
                                             lastCard['id'] as String,
                                             last.lang,
-                                            _finish,
+                                            _settings.finish,
                                           );
                                     setState(() => _added++);
                                     _showAdded(lastCard, qty);
@@ -953,24 +685,4 @@ class _ScanPageState extends State<ScanPage> {
             ),
     );
   }
-}
-
-/// A heading in the settings sheet with the line that explains it.
-class _SheetTitle extends StatelessWidget {
-  final String title;
-  final String hint;
-  const _SheetTitle(this.title, this.hint);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 18, bottom: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 2),
-        Text(hint, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    ),
-  );
 }
