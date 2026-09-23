@@ -109,6 +109,8 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
 .toolbar input[type='search'] { flex: 1 1 220px; min-width: 0; }
 .toolbar select { max-width: 190px; }
 .toolbar #filters { white-space: nowrap; }
+.budget { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+.budget input { width: 90px; }
 .check {
   min-height: 44px; display: inline-flex; align-items: center; gap: 9px; white-space: nowrap;
   padding: 6px 12px 6px 10px; border: 1px solid var(--line); border-radius: 999px;

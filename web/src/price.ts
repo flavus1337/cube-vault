@@ -14,3 +14,20 @@ export const priceFor = (finish: string, own?: PrintPrice, english?: PrintPrice)
     finish === 'nonfoil' ? price?.price_eur : price?.price_eur_foil
   return pick(own) ?? pick(english) ?? null
 }
+
+/* The cheapest cards that still fit a budget. A card without a price counts
+   as free — Scryfall simply does not know it, and leaving it out would hide
+   it from the list for good. */
+export function withinBudget<T extends { price_eur: number | null }>(cards: T[], limit: number) {
+  if (!limit) return cards
+  const cheapest = [...cards].sort((a, b) => (a.price_eur ?? 0) - (b.price_eur ?? 0))
+  const fits: T[] = []
+  let spent = 0
+  for (const card of cheapest) {
+    const price = card.price_eur ?? 0
+    if (spent + price > limit) break
+    fits.push(card)
+    spent += price
+  }
+  return fits
+}
