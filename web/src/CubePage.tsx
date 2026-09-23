@@ -6,6 +6,7 @@ import { euro, summary } from './format'
 import { COLOR_LABELS, COLORS, keywordLabel, RARITY, TYPES } from './mtg'
 import { copyToClipboard, refreshCubePrices, wantList } from './prices'
 import { parseQuery } from './query'
+import { useGrowing } from './useGrowing'
 import { loadTags } from './tags'
 import { canEdit, supabase, type Card, type Copy, type CubeSet, type Role } from './supabase'
 
@@ -218,6 +219,7 @@ export default function CubePage({ role }: { role: Role }) {
   const list = matched.filter(
     (c) => show === 'all' || (show === 'owned') === Boolean(copies.get(c.id)),
   )
+  const { visible, more, sentinel } = useGrowing(list)
   const owned = matched.filter((c) => copies.get(c.id))
   const missing = matched.filter((c) => !copies.get(c.id))
   /* Each stack is worth what its own printing and finish cost; only a stack
@@ -420,7 +422,7 @@ export default function CubePage({ role }: { role: Role }) {
         </p>
       ) : (
         <div className="grid">
-          {list.map((c) => {
+          {visible.map((c) => {
             const count = copies.get(c.id) ?? 0
             return (
               <button
@@ -436,6 +438,11 @@ export default function CubePage({ role }: { role: Role }) {
               </button>
             )
           })}
+        </div>
+      )}
+      {more > 0 && (
+        <div ref={sentinel} className="status">
+          Noch {more} Karten …
         </div>
       )}
 
