@@ -117,6 +117,11 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
 .check:hover { border-color: var(--brass); }
 .check:has(input:checked) { border-color: var(--accent); color: var(--text); }
 .summary { margin: 12px 2px 18px; font-variant-numeric: tabular-nums; }
+/* The numbers of a page, each under its word. */
+.summary-bar { margin: 14px 2px 18px; }
+.summary-bar .deck-stats { margin: 0; gap: 6px 24px; }
+.summary-bar .lead dd { color: var(--accent); }
+.summary-bar .hint { margin: 6px 0 0; font-size: 13px; }
 .status { color: var(--muted); text-align: center; padding: 48px 16px; border-block: 1px solid var(--line); }
 
 .colors { display: flex; gap: 6px; }
@@ -195,7 +200,38 @@ dialog.filter-dialog::backdrop { background: rgb(9 7 6 / .72); backdrop-filter: 
   border-top: 1px solid var(--line); background: var(--panel-raised);
 }
 
-.grid { display: grid; gap: clamp(10px, 1.5vw, 18px); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid { display: grid; gap: clamp(10px, 1.5vw, 18px); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: start; }
+
+/* A card and the line that says what its number means. Nothing lies on the
+   picture, so name, mana cost and power stay readable. */
+.card-cell { display: grid; gap: 5px; min-width: 0; }
+.card-cell .tile { width: 100%; }
+.tile-note {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px;
+  min-height: 22px; padding: 0 2px; font-size: 13px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tile-note strong { color: var(--text); font-weight: 700; }
+.note-buttons { display: flex; gap: 4px; }
+.note-buttons button { min-height: 28px; padding: 1px 9px; font-size: 14px; line-height: 1; }
+/* In the pool a tap on the card adds it, so the line below opens the card. */
+.note-link {
+  min-height: 22px; padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+.note-link:hover, .note-link:focus-visible { color: var(--text); background: none; }
+
+
+/* Set, price and rarity, only while the pointer rests on the card. */
+.tile-meta {
+  position: absolute; inset: auto 3px 3px; padding: 5px 8px; border-radius: 0 0 8px 8px;
+  background: rgb(21 18 15 / .92); color: var(--text); font-size: 12px; text-align: center;
+  opacity: 0; transform: translateY(6px); transition: opacity .12s ease, transform .12s ease;
+  pointer-events: none;
+}
+.tile:hover .tile-meta, .tile:focus-visible .tile-meta { opacity: 1; transform: none; }
+@media (hover: none) { .tile-meta { display: none; } }
 .tile {
   position: relative; min-width: 0; height: auto; padding: 3px; border: 1px solid var(--line);
   border-radius: 4.8% / 3.4%; background: var(--panel); text-align: left; box-shadow: 0 7px 18px rgb(0 0 0 / .2);
@@ -205,7 +241,7 @@ dialog.filter-dialog::backdrop { background: rgb(9 7 6 / .72); backdrop-filter: 
 .tile.missing img { opacity: .55; }
 .tile.excluded img { filter: grayscale(1); opacity: .4; }
 .noimg { aspect-ratio: 488 / 680; border-radius: 8px; background: var(--panel-raised); padding: 14px; font-family: ui-serif, Georgia, serif; }
-/* Bottom left: the top right corner of a card carries the mana cost. */
+/* Only the deck stack still draws on a card, where nothing can sit below it. */
 .badge {
   position: absolute; bottom: 10px; left: 10px; background: var(--accent); color: var(--ink);
   border: 1px solid rgb(21 18 15 / .35); border-radius: 999px; padding: 2px 8px; font-weight: 800; font-size: 13px;
@@ -379,12 +415,7 @@ tr.waiting td { background: #e8a24a14; }
   .tile:hover, .tile:focus-visible, .pip:hover, .pip:focus-visible { transform: none; }
 }
 
-.tile-open { display: block; width: 100%; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; }
-.tile.private .badge { top: 10px; bottom: auto; }
-/* Above the plus and minus bar, clear of the mana cost. */
-.tile.private .badge.out { top: auto; bottom: 52px; right: 10px; left: auto; }
-.tile.private .copies { position: absolute; inset: auto 0 0 0; justify-content: center; gap: 8px; padding: 6px; }
-.tile.private .copies button { width: 40px; height: 34px; font-size: 18px; }
+
 
 .bars { margin: 20px 0; }
 .bars h2 { font-size: 17px; margin: 0 0 8px; }
@@ -464,8 +495,7 @@ tr.waiting td { background: #e8a24a14; }
 .deck-column h3 .muted { color: var(--text); font-weight: 700; }
 .pool { position: sticky; top: 74px; max-height: calc(100dvh - 90px); overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 .pool .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.pool .badge { font-size: 11px; padding: 1px 6px; bottom: 6px; left: 6px; }
-.pool .badge.out { top: 6px; bottom: auto; left: 6px; right: auto; }
+.pool .tile-note { font-size: 12px; gap: 2px 6px; }
 /* The deck as a stack of cards: each one shows its name strip, the card under
    the pointer comes to the front. */
 .deck-stack { display: flex; flex-direction: column; margin: 4px 0 8px; }
@@ -483,14 +513,6 @@ tr.waiting td { background: #e8a24a14; }
 .stack-card .badge.out { top: 26px; bottom: auto; left: auto; right: 46px; }
 .stack-card.short img { outline: 2px solid var(--warning, #e1ad55); }
 
-/* A tile adds the card, the small button next to it opens the detail view. */
-.tile-wrap { position: relative; min-width: 0; }
-.tile-wrap .tile { width: 100%; }
-.peek {
-  position: absolute; right: 6px; bottom: 6px; width: 28px; height: 28px; min-height: 28px; padding: 0;
-  line-height: 1; font-size: 15px; border-radius: 999px; border-color: var(--brass);
-  background: rgb(21 18 15 / .86); color: var(--text);
-}
 
 .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); }
 .dot-W { background: var(--W); } .dot-U { background: var(--U); } .dot-B { background: var(--B); }

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import CardDetail, { CopyRows } from './CardDetail'
+import CardTile from './CardTile'
+import Summary from './Summary'
 import { CardSkeleton } from './Skeleton'
-import { euro, finishLabel, summary } from './format'
+import { euro, finishLabel } from './format'
 import { usePrivateCards } from './mine'
 import { useNotices } from './notices'
 import { copyToClipboard, refreshPrivatePrices, wantList } from './prices'
@@ -89,9 +91,7 @@ export default function MyCardsPage() {
         </button>
         {notice && <span className="muted">{notice}</span>}
       </div>
-      <p className="muted summary">
-        {summary({ cards: list.length, copies, value })}
-      </p>
+      <Summary cards={list.length} copies={copies} value={value} />
 
       {error ? (
         <p className="status">Laden fehlgeschlagen: {error}</p>
@@ -104,30 +104,23 @@ export default function MyCardsPage() {
       ) : (
         <div className="grid">
           {visible.map((c) => (
-            <div key={key(c)} className="tile private">
-              <button
-                className="tile-open"
-                title={`${name(c)} — ${type(c)}`}
-                aria-label={`${name(c)} ansehen`}
-                onClick={() => setSelectedId(key(c))}
-              >
-                {c.image ? (
-                  <img src={c.image} alt={name(c)} loading="lazy" />
-                ) : (
-                  <div className="noimg">{name(c)}</div>
-                )}
-              </button>
-              <span className="badge">{c.qty}×</span>
-              {c.finish !== 'nonfoil' && <span className="badge out">{finishLabel(c.finish)}</span>}
-              <div className="copies">
+            <CardTile
+              key={key(c)}
+              image={c.image}
+              name={`${name(c)} — ${type(c)}`}
+              meta={`${c.set_code.toUpperCase()} #${c.number} · ${euro(c.price_eur)} · ${finishLabel(c.finish)}`}
+              note={`${c.qty}× ${finishLabel(c.finish)}`}
+              onClick={() => setSelectedId(key(c))}
+            >
+              <span className="note-buttons">
                 <button aria-label={`Eine Kopie von ${name(c)} weniger`} onClick={() => change(c, -1)}>
                   −
                 </button>
                 <button aria-label={`Eine Kopie von ${name(c)} mehr`} onClick={() => change(c, 1)}>
                   +
                 </button>
-              </div>
-            </div>
+              </span>
+            </CardTile>
           ))}
         </div>
       )}

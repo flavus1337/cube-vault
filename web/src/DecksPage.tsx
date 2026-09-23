@@ -15,6 +15,7 @@ import {
   type DeckCard,
   type PoolCard,
 } from './deck'
+import CardTile from './CardTile'
 import DeckColumns from './DeckColumns'
 import { euro } from './format'
 import OpeningHand from './OpeningHand'
@@ -451,30 +452,26 @@ export default function DecksPage() {
               {shown.map((card) => {
                 const inThisDeck = inDeck.find((row) => row.print_id === card.key)?.qty ?? 0
                 return (
-                  <div key={card.key} className="tile-wrap">
-                    <button
-                      className="tile"
-                      title={`${name(card)} — ${card.type_de || card.type_line}`}
-                      aria-label={`${name(card)} ins Deck`}
-                      onClick={() => change(card.key, 1)}
-                    >
-                      {card.image ? (
-                        <img src={card.image} alt={name(card)} loading="lazy" />
-                      ) : (
-                        <div className="noimg">{name(card)}</div>
-                      )}
-                      {inThisDeck > 0 && <span className="badge">{inThisDeck}×</span>}
-                      <span className="badge out">{card.owned} da</span>
-                    </button>
-                    <button
-                      className="peek"
-                      title="Karte ansehen"
-                      aria-label={`${name(card)} ansehen`}
-                      onClick={() => setSelectedKey(card.key)}
-                    >
-                      ⌕
-                    </button>
-                  </div>
+                  <CardTile
+                    key={card.key}
+                    image={card.image}
+                    name={`${name(card)} — ${card.type_de || card.type_line}`}
+                    meta={`${card.set_code.toUpperCase()} #${card.number} · ${euro(card.price_eur)}`}
+                    note={
+                      <button
+                        className="note-link"
+                        title="Karte ansehen"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedKey(card.key)
+                        }}
+                      >
+                        {card.owned} vorhanden
+                        {inThisDeck > 0 && <strong> · {inThisDeck} im Deck</strong>}
+                      </button>
+                    }
+                    onClick={() => change(card.key, 1)}
+                  />
                 )
               })}
             </div>
