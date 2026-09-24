@@ -69,16 +69,22 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
 .nowrap { white-space: nowrap; }
 
 .center { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 32px 20px; text-align: center; }
+/* The sign-in screen gets the brand's own ground. */
+.gate-page { background: #0b0a09 url('./background.webp') center / cover no-repeat; }
+@media (max-width: 760px) { .gate-page { background-image: url('./background-mobile.webp'); } }
 .gate { position: relative; isolation: isolate; }
 .gate::before {
   content: ''; position: absolute; z-index: -1; top: 50%; left: 50%;
   width: min(520px, calc(100% - 32px)); height: min(430px, calc(100% - 48px));
   transform: translate(-50%, -50%);
-  border: 1px solid var(--line); border-radius: 16px; background: rgb(33 27 22 / .82); box-shadow: var(--shadow);
+  border: 1px solid var(--line-strong); border-radius: 18px; background: rgb(11 10 9 / .72);
+  backdrop-filter: blur(6px); box-shadow: 0 24px 60px rgb(0 0 0 / .5);
 }
 .gate p { max-width: 40ch; margin: 0; }
 .gate-title { margin: 0; line-height: 0; }
-.gate-logo { width: min(300px, 75vw); height: auto; filter: drop-shadow(0 14px 22px rgb(0 0 0 / .35)); }
+.gate-logo { width: min(260px, 66vw); height: auto; border-radius: 22px;
+  filter: drop-shadow(0 18px 30px rgb(0 0 0 / .5)); }
+.brand img { height: 34px; }
 
 .topbar {
   position: sticky; top: 0; z-index: 2; min-width: 0;

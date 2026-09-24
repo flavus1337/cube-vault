@@ -1,7 +1,7 @@
 {
-  "name": "Cube Vault",
-  "short_name": "Cube Vault",
-  "description": "Der Cube und eure Karten",
+  "name": "Cubist",
+  "short_name": "Cubist",
+  "description": "Euer Cube und eure Karten",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,6 +9,7 @@
   "theme_color": "#15120f",
   "lang": "de",
   "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ]
