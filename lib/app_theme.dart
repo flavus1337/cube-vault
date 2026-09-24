@@ -199,7 +199,7 @@ class VaultLogo extends StatelessWidget {
       compact ? 'assets/logo-mark.png' : 'assets/logo.png',
       height: height,
       fit: BoxFit.contain,
-      semanticLabel: 'Cube Vault',
+      semanticLabel: 'Cubist',
     );
   }
 }

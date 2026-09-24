@@ -127,11 +127,12 @@ class _AuthScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: DecoratedBox(
+        // The brand's own ground: dark stone, colour only at the edges.
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [VaultColors.ink, VaultColors.surfaceHigh],
+          color: VaultColors.ink,
+          image: DecorationImage(
+            image: AssetImage('assets/background.webp'),
+            fit: BoxFit.cover,
           ),
         ),
         child: SafeArea(

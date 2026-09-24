@@ -4,7 +4,7 @@ import 'config.dart';
 
 SupabaseClient get _sb => Supabase.instance.client;
 
-/// Cube Vault data in Supabase (schema: supabase/migrations).
+/// Cubist data in Supabase (schema: supabase/migrations).
 class Db {
   static Future<void> open() =>
       Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
