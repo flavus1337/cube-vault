@@ -133,7 +133,8 @@ export default function App() {
     <>
       <header className="topbar">
         <a className="brand" href="#/cube" aria-label="Cubist">
-          <img src="./logo.png" alt="" />
+          <img className="brand-mark" src="./icon-192.png" alt="" />
+          <img className="brand-word" src="./logo.png" alt="" />
         </a>
         <nav aria-label="Hauptnavigation">
           {nav.map(([path, label]) => (
