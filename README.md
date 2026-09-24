@@ -1,4 +1,4 @@
-# Cube Vault
+# Cubist
 
 Shared Magic cube for a group of players: an Android app scans the cards, a
 website shows the cube, and Supabase holds the data.

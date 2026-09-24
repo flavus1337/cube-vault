@@ -1,8 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#15120f"/>
-  <path d="m32 7 21 12-21 12L11 19Z" fill="#eee6dc"/>
-  <path d="m9 22 21 12v24L9 46Z" fill="#e0703a"/>
-  <path d="m55 22-21 12v24l21-12Z" fill="#b8905a"/>
-  <circle cx="32" cy="34" r="4" fill="#15120f"/>
-  <path d="m29.5 37 5 0 2 8h-9Z" fill="#15120f"/>
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cubist">
+  <!-- The five shards of the app icon, reduced to what still reads at 16 px:
+       ivory, sapphire, amethyst, ember, emerald, split by dark fractures. -->
+  <rect width="64" height="64" rx="12" fill="#0b0a09"/>
+  <g>
+    <path d="M8 8 h10 l-1 48 H8 z" fill="#cfa855"/>
+    <path d="M19 8 h10 l-1 48 h-10 z" fill="#2f77c4"/>
+    <path d="M30 8 h9 l1 48 h-11 z" fill="#6b3fa8"/>
+    <path d="M40 8 h10 l1 48 h-10 z" fill="#cf5a22"/>
+    <path d="M51 8 h5 v48 h-4 z" fill="#3f8d4c"/>
+  </g>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="10" fill="none" stroke="#c8a765" stroke-width="3"/>
 </svg>

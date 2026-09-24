@@ -27,7 +27,7 @@ const PAGES: [string, string][] = [
 function usePageTitle(route: string) {
   useEffect(() => {
     const label = PAGES.find(([path]) => path === route)?.[1]
-    document.title = label ? `${label} · Cube Vault` : 'Cube Vault'
+    document.title = label ? `${label} · Cubist` : 'Cubist'
     scrollTo({ top: 0 })
   }, [route])
 }
@@ -78,9 +78,9 @@ export default function App() {
 
   if (!session) {
     return (
-      <div className="center gate">
+      <div className="center gate gate-page">
         <h1 className="gate-title">
-          <img className="gate-logo" src="./logo.png" alt="Cube Vault" />
+          <img className="gate-logo" src="./badge.png" alt="Cubist" />
         </h1>
         <p className="muted">Der Cube ist nur für freigegebene Spieler sichtbar.</p>
         <button
@@ -114,9 +114,9 @@ export default function App() {
 
   if (!profile || profile.role === 'waiting') {
     return (
-      <div className="center gate">
+      <div className="center gate gate-page">
         <h1 className="gate-title">
-          <img className="gate-logo" src="./logo.png" alt="Cube Vault" />
+          <img className="gate-logo" src="./badge.png" alt="Cubist" />
         </h1>
         <p>{profile ? 'Warte auf Freigabe durch einen Admin.' : 'Dein Profil wurde nicht gefunden.'}</p>
         <p className="muted">Sobald du freigegeben bist, lade die Seite neu.</p>
@@ -132,7 +132,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <a className="brand" href="#/cube" aria-label="Cube Vault">
+        <a className="brand" href="#/cube" aria-label="Cubist">
           <img src="./logo.png" alt="" />
         </a>
         <nav aria-label="Hauptnavigation">
