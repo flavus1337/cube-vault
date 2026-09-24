@@ -1,5 +1,8 @@
 # Cubist
 
+Der Cube und eure Karten: mit dem Handy scannen, auf der Website suchen,
+filtern und Decks bauen.
+
 Shared Magic cube for a group of players: an Android app scans the cards, a
 website shows the cube, and Supabase holds the data.
 

@@ -9,7 +9,7 @@ Future<void> main() async {
   await Db.open();
   runApp(
     MaterialApp(
-      title: 'Cube Vault',
+      title: 'Cubist',
       theme: buildVaultTheme(),
       home: const AuthGate(),
     ),
