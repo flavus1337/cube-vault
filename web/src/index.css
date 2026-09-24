@@ -25,8 +25,17 @@
 html { background: var(--bg); }
 body {
   min-width: 0; min-height: 100vh; margin: 0; color: var(--text);
-  background: radial-gradient(circle at 50% -20%, #30251c 0, var(--bg) 42rem);
+  /* The brand's ground: dark stone that stays put while the cards scroll by,
+     with colour only at the edges. */
+  background: var(--bg) url('./background.webp') top center / cover no-repeat fixed;
   font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+/* A veil over it, so a thousand card images stay the loudest thing on screen. */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; background: rgb(11 10 9 / .58);
+}
+@media (max-width: 760px) {
+  body { background-image: url('./background-mobile.webp'); }
 }
 h1, h2 { font-family: ui-serif, Georgia, serif; letter-spacing: .025em; }
 h1 { margin: 0 0 20px; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; }
@@ -69,7 +78,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
 .nowrap { white-space: nowrap; }
 
 .center { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 32px 20px; text-align: center; }
-/* The sign-in screen gets the brand's own ground. */
+/* The sign-in screen gets the brand's ground at full strength. */
 .gate-page { background: #0b0a09 url('./background.webp') center / cover no-repeat; }
 @media (max-width: 760px) { .gate-page { background-image: url('./background-mobile.webp'); } }
 .gate { position: relative; isolation: isolate; }
@@ -91,8 +100,10 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: .45; cu
   padding: 10px clamp(12px, 2.5vw, 28px); border-bottom: 1px solid var(--line-strong);
   background: rgb(21 18 15 / .94); box-shadow: 0 8px 22px rgb(0 0 0 / .18); backdrop-filter: blur(12px);
 }
-.brand { display: flex; align-items: center; border-radius: 6px; }
-.brand img { width: auto; height: 40px; display: block; }
+.brand { display: flex; align-items: center; gap: 10px; border-radius: 6px; }
+.brand-mark { width: 38px; height: 38px; border-radius: 10px; display: block;
+  box-shadow: 0 2px 10px rgb(0 0 0 / .5); }
+.brand-word { width: auto; height: 34px; display: block; }
 .topbar nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .topbar nav a {
   display: inline-flex; min-height: 44px; align-items: center; color: var(--muted);
@@ -444,7 +455,7 @@ tr.waiting td { background: #e8a24a14; }
 @media (max-width: 480px) {
   .topbar { padding-inline: 10px; }
   .brand { min-width: 44px; min-height: 44px; justify-content: center; }
-  .brand img { height: 34px; }
+  .brand-word { display: none; }
   .me span { display: none; }
   .me button { padding-inline: 9px; }
   .topbar nav { gap: 2px; }
